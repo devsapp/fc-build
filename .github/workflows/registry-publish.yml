@@ -30,7 +30,7 @@ jobs:
           ls
       - name: Publish package
         env:
-          publish_token: ${{ secrets.publish_token }}
+          publish_token: ${{ secrets.alibaba_registry_publish_token }}
         run: |
           ls
           python hub-publish.py
