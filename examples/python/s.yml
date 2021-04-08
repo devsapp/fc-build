@@ -1,12 +1,15 @@
-buildApp:
-  Component: /Users/wb447188/Desktop/new-components/fc-atom/fc-build-alibaba-component/dist/index.js # 项目路径
-  # Component: fc
-  Provider: alibaba
-  Properties:
-    region: cn-shenzhen
-    service:
-      name: fc-com-test
-    function:
-      name: build-image
-      runtime: python2.7
-      codeUri: .
+edition: 1.0.0          #  命令行YAML规范版本，遵循语义化版本（Semantic Versioning）规范
+name: buildApp          #  项目名称
+access: aliyun-release  #  秘钥别名
+
+services:
+  python27-test: #  服务名称
+    component: fc-build  # 组件名称
+    props: #  组件的属性值
+      region: cn-shenzhen
+      service:
+        name: build-test-service
+      function:
+        name: build-test-function
+        runtime: python2.7
+        codeUri: .
