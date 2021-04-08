@@ -1,0 +1,14 @@
+buildApp:
+  Component: /Users/wb447188/Desktop/new-components/fc-atom/fc-build-alibaba-component/dist/index.js # 项目路径
+  Provider: alibaba
+  Properties:
+    region: cn-hongkong
+    service:
+      name: fc-com-test
+    function:
+      name: build-image
+      runtime: custom-container
+      customContainer:
+        image: 'registry.cn-hongkong.aliyuncs.com/s-devs-generate/fc-com-test-build-image:v0.1'  # 仓库地址
+        command: '["node"]'
+        args: '["index.js"]'

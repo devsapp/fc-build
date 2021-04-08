@@ -1,0 +1,12 @@
+buildApp:
+  Component: /Users/wb447188/Desktop/new-components/fc-atom/fc-build-alibaba-component/dist/index.js # 项目路径
+  # Component: fc-build
+  Provider: alibaba
+  Properties:
+    region: cn-shenzhen
+    service:
+      name: fc-com-test
+    function:
+      name: build-image
+      runtime: nodejs12
+      codeUri: .

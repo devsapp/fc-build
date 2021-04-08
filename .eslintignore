@@ -1,0 +1,8 @@
+node_modules/
+build/
+dist/
+test/
+**/*.min.js
+**/*-min.js
+**/*.bundle.js
+src/utils/ncp.ts
