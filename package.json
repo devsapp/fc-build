@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@alicloud/fc-builders": "^0.15.3",
-    "@serverless-devs/core": "^0.0.40",
+    "@serverless-devs/core": "^0.0.52",
     "dockerode": "^3.2.1",
     "draftlog": "^1.0.12",
     "fs-extra": "^9.1.0",

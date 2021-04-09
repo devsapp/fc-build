@@ -1,3 +1,14 @@
+export interface IInputs {
+    props: IProperties;
+    appName: string;
+    args: string;
+    path: any;
+    project: {
+        component: string;
+        access: string;
+        projectName: string;
+    };
+}
 export interface IBuildInput {
     serviceName: string;
     functionName: string;

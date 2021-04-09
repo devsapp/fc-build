@@ -45,5 +45,5 @@
 ````
 $ npm i
 
-$ npm run build:ts && npm run package-zip
+$ npm run build:ts
 ````
