@@ -8,7 +8,7 @@ import { checkCodeUri, getArtifactPath, getExcludeFilesEnv } from './utils';
 import generateBuildContainerBuildOpts from './build-opts';
 import { dockerRun } from './docker';
 import { CONTEXT } from './constant';
-import { IBuildInput, ICodeUri, IBuildDir, IObject } from '../interface';
+import { IBuildInput, ICodeUri, IBuildDir } from '../interface';
 
 interface INeedBuild {
   baseDir: string;
@@ -25,13 +25,13 @@ export default class Builder {
   @HLogger(CONTEXT) logger: ILogger;
 
   private commands: any;
-  private parameters: any;
+  private dockerfile: string;
   projectName: string;
 
-  constructor(projectName: string, commands: any[], parameters: IObject) {
+  constructor(projectName: string, commands: any[], dockerfile: string) {
     this.projectName = projectName;
     this.commands = commands;
-    this.parameters = parameters;
+    this.dockerfile = dockerfile;
   }
 
   async buildImage(buildInput: IBuildInput): Promise<string> {
@@ -46,8 +46,7 @@ export default class Builder {
       throw new Error(errorMessage);
     }
 
-    const { d, dockerfile } = this.parameters;
-    const dockerFileName = d || dockerfile || 'Dockerfile';
+    const dockerFileName = this.dockerfile || 'Dockerfile';
     if (!fs.existsSync(dockerFileName)) {
       const errorMessage = 'No dockerfile found.';
       await report(errorMessage, {

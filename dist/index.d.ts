@@ -1,11 +1,12 @@
 import { ILogger } from '@serverless-devs/core';
+import { IInputs } from './interface';
 interface IOutput {
-    Properties: any;
+    props: any;
     image?: string;
     buildSaveUri?: string;
 }
 export default class Build {
     logger: ILogger;
-    build(inputs: any): Promise<IOutput>;
+    build(inputs: IInputs): Promise<IOutput>;
 }
 export {};

@@ -1,5 +1,5 @@
 import { ILogger } from '@serverless-devs/core';
-import { IBuildInput, ICodeUri, IBuildDir, IObject } from '../interface';
+import { IBuildInput, ICodeUri, IBuildDir } from '../interface';
 interface INeedBuild {
     baseDir: string;
     runtime: string;
@@ -12,9 +12,9 @@ interface IBuildOutput {
 export default class Builder {
     logger: ILogger;
     private commands;
-    private parameters;
+    private dockerfile;
     projectName: string;
-    constructor(projectName: string, commands: any[], parameters: IObject);
+    constructor(projectName: string, commands: any[], dockerfile: string);
     buildImage(buildInput: IBuildInput): Promise<string>;
     build(buildInput: IBuildInput): Promise<IBuildOutput>;
     buildInDocker({ region, serviceName, serviceProps, functionName, functionProps, verbose, credentials, }: IBuildInput, src: string): Promise<string>;

@@ -3,10 +3,9 @@ import { CONTEXT } from './constant';
 import _ from 'lodash';
 import path from 'path';
 import readline from 'readline';
-import yaml from 'js-yaml';
 import fs from 'fs-extra';
 import { SUPPORTRUNTIMEBUILDList, BUILDCOMMANDList } from './constant';
-import { ICodeUri, IBuildDir, IObject, IServiceProps, IFunctionProps } from '../interface';
+import { ICodeUri, IBuildDir, IObject } from '../interface';
 
 const BUILDARTIFACTS = path.join('.s', 'build', 'artifacts');
 
@@ -138,52 +137,4 @@ export async function resolveLibPathsFromLdConf(
     envs.LD_LIBRARY_PATH = libPaths.map((path) => `/code/.s/root${path}`).join(':');
   }
   return envs;
-}
-
-interface ISaveBuild {
-  region: string;
-  serviceProps: IServiceProps;
-  functionProps: IFunctionProps;
-  project: IProject;
-}
-
-interface IProject {
-  [key: string]: any;
-}
-
-export async function saveBuildYaml({
-  region,
-  serviceProps,
-  functionProps,
-  project,
-}: ISaveBuild): Promise<void> {
-  const baseDir = process.cwd();
-  const rootArtifactsDir = path.join(baseDir, BUILDARTIFACTS);
-
-  try {
-    functionProps.codeUri = path.join(serviceProps.name, functionProps.name);
-
-    const projectName = project.ProjectName;
-    delete project.ProjectName;
-    if (project.AccessAlias) {
-      project.Access = project.AccessAlias;
-      delete project.AccessAlias;
-    }
-
-    await fs.writeFile(
-      path.join(rootArtifactsDir, `${projectName}.build.yml`),
-      yaml.dump({
-        [projectName]: {
-          ...project,
-          Properties: {
-            region: region,
-            service: serviceProps,
-            function: functionProps,
-          },
-        },
-      }),
-    );
-  } catch (e) {
-    throw e;
-  }
 }

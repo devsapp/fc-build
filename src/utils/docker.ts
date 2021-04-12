@@ -11,7 +11,7 @@ import { generateDebugEnv, addEnv } from './env';
 import { CONTEXT } from './constant';
 import { IServiceProps, IFunctionProps, IObject, ICredentials } from '../interface';
 
-const pkg = require('../package.json');
+const pkg = require('../../package.json');
 DraftLog.into(console);
 
 const docker = new Docker();
