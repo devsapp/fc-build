@@ -1,4 +1,4 @@
-import { HLogger, ILogger, report } from '@serverless-devs/core';
+import { HLogger, ILogger } from '@serverless-devs/core';
 import fs from 'fs-extra';
 import path from 'path';
 import _ from 'lodash';
@@ -39,30 +39,18 @@ export default class Builder {
 
     if (!customContainer) {
       const errorMessage = "No 'CustomContainer' configuration found in Function.";
-      await report(errorMessage, {
-        type: 'error',
-        context: CONTEXT,
-      });
       throw new Error(errorMessage);
     }
 
     const dockerFileName = this.dockerfile || 'Dockerfile';
     if (!fs.existsSync(dockerFileName)) {
       const errorMessage = 'No dockerfile found.';
-      await report(errorMessage, {
-        type: 'error',
-        context: CONTEXT,
-      });
       throw new Error(errorMessage);
     }
 
     const imageName = customContainer.image;
     if (!imageName) {
       const errorMessage = 'Function/CustomContainer/Image required.';
-      await report(errorMessage, {
-        type: 'error',
-        context: CONTEXT,
-      });
       throw new Error(errorMessage);
     }
 
@@ -74,10 +62,6 @@ export default class Builder {
       this.logger.log(`Build image(${imageName}) successfully`);
       return imageName;
     } catch (e) {
-      await report(e, {
-        type: 'error',
-        context: CONTEXT,
-      });
       throw e;
     }
   }
@@ -157,10 +141,6 @@ export default class Builder {
     const exitRs = await dockerRun(opts);
     if (exitRs.StatusCode !== 0) {
       const errorMessage = `build function ${serviceName}/${functionName} error.`;
-      await report(errorMessage, {
-        type: 'error',
-        context: CONTEXT,
-      });
       throw new Error(errorMessage);
     }
     return funcArtifactDir;

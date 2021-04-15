@@ -1,8 +1,8 @@
-import { HLogger, ILogger, report, commandParse, help } from '@serverless-devs/core';
+import { HLogger, ILogger, reportComponent, getCredential, commandParse, help } from '@serverless-devs/core';
 import _ from 'lodash';
 import Builder from './utils/builder';
 import { IInputs, IBuildInput } from './interface';
-import { CONTEXT, HELP } from './utils/constant';
+import { CONTEXT, HELP, CONTEXT_NAME } from './utils/constant';
 import { checkCommands } from './utils/utils';
 
 interface IOutput {
@@ -32,16 +32,19 @@ export default class Build {
       return;
     }
 
+    const credentials = await getCredential(inputs.project.access);
+    reportComponent(CONTEXT_NAME, {
+      command: 'build',
+      uid: credentials.AccountID,
+      remark: 'fc build',
+    });
+
     const { region, service: serviceProps, function: functionProps } = inputs.props;
     const runtime = functionProps.runtime;
 
     try {
       checkCommands(commands, runtime);
     } catch (e) {
-      await report(e, {
-        type: 'error',
-        context: CONTEXT,
-      });
       throw e;
     }
 
