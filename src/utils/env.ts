@@ -1,4 +1,4 @@
-import { Logger, report } from '@serverless-devs/core';
+import { Logger } from '@serverless-devs/core';
 import { CONTEXT } from './constant';
 import ip from 'ip';
 import _ from 'lodash';
@@ -111,10 +111,6 @@ export function generateDebugEnv(runtime: string, debugPort?: string, debugIde?:
     case 'dotnetcore2.1':
       return { DEBUG_OPTIONS: 'true' };
     default:
-      report('could not found runtime.', {
-        type: 'error',
-        context: CONTEXT,
-      });
       throw new Error('could not found runtime.');
   }
 }

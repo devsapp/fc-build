@@ -1,4 +1,4 @@
-import { Logger, report } from '@serverless-devs/core';
+import { Logger } from '@serverless-devs/core';
 import _ from 'lodash';
 import fs from 'fs-extra';
 import path from 'path';
@@ -55,10 +55,6 @@ async function createContainer(opts): Promise<any> {
       const pathsOutofSharedPaths = await findPathsOutofSharedPaths(opts.HostConfig.Mounts);
       if (isMac && pathsOutofSharedPaths.length > 0) {
         const errorMessage = `Please add directory '${pathsOutofSharedPaths}' to Docker File sharing list, more information please refer to https://github.com/alibaba/funcraft/blob/master/docs/usage/faq-zh.md`;
-        await report(errorMessage, {
-          type: 'error',
-          context: CONTEXT,
-        });
         throw new Error(errorMessage);
       }
     }
@@ -73,24 +69,12 @@ async function createContainer(opts): Promise<any> {
     if (ex.message.indexOf('invalid mount config for type') !== -1 && dockerToolBox) {
       const errorMessage =
         "The default host machine path for docker toolbox is under 'C:\\Users', Please make sure your project is in this directory. If you want to mount other disk paths, please refer to https://github.com/alibaba/funcraft/blob/master/docs/usage/faq-zh.md.";
-      await report(errorMessage, {
-        type: 'error',
-        context: CONTEXT,
-      });
       throw new Error(errorMessage);
     }
     if (ex.message.indexOf('drive is not shared') !== -1 && isWin) {
       const errorMessage = `${ex.message}More information please refer to https://docs.docker.com/docker-for-windows/#shared-drives`;
-      await report(errorMessage, {
-        type: 'error',
-        context: CONTEXT,
-      });
       throw new Error(errorMessage);
     }
-    await report(ex, {
-      type: 'error',
-      context: CONTEXT,
-    });
     throw ex;
   }
   return container;
@@ -118,10 +102,6 @@ async function detectDockerVersion(serverVersion: string): Promise<void> {
   // 1.13.1
   if (Number.parseInt(cur[0]) === 1 && Number.parseInt(cur[1]) <= 13) {
     const errorMessage = `We detected that your docker version is ${serverVersion}, for a better experience, please upgrade the docker version.`;
-    await report(errorMessage, {
-      type: 'error',
-      context: CONTEXT,
-    });
     throw new Error(errorMessage);
   }
 }

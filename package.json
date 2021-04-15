@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@alicloud/fc-builders": "^0.15.3",
-    "@serverless-devs/core": "^0.0.52",
+    "@serverless-devs/core": "^0.0.58",
     "dockerode": "^3.2.1",
     "draftlog": "^1.0.12",
     "fs-extra": "^9.1.0",
@@ -40,7 +40,7 @@
   "scripts": {
     "dev": "npx tsc -w -p tsconfig.json",
     "prebuild": "rimraf dist",
-    "build:ts": "npx tsc -p tsconfig.json",
+    "build": "npx tsc -p tsconfig.json",
     "build:component": "npx webpack --mode=production",
     "package-zip": "cp -rf package*.json publish.yaml ./dist",
     "test": "jest",
