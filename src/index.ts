@@ -15,6 +15,11 @@ export default class Build {
   @HLogger(CONTEXT) logger: ILogger;
 
   async build(inputs: IInputs) {
+    // @ts-ignore
+    delete inputs.Credentials;
+    // @ts-ignore
+    delete inputs.credentials;
+    
     this.logger.info('Build artifact start...');
     const projectName = inputs.project?.projectName;
     this.logger.debug(`[${projectName}]inputs params: ${JSON.stringify(inputs)}`);
