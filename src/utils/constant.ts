@@ -12,7 +12,7 @@ export const HELP = [
       {
         name: 'dockerfile',
         description: '指定 dockerfile 路径',
-        alias: 't',
+        alias: 'd',
         defaultOption: false,
         type: String,
       },

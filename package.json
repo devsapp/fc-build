@@ -1,6 +1,6 @@
 {
   "name": "fc-build",
-  "version": "0.0.3",
+  "version": "0.0.7",
   "main": "./dist/index.js",
   "fc-docker": {
     "version": "1.9.17",
@@ -38,11 +38,10 @@
     "webpack-cli": "^4.6.0"
   },
   "scripts": {
+    "start": "npm run dev",
     "dev": "npx tsc -w -p tsconfig.json",
     "prebuild": "rimraf dist",
     "build": "npx tsc -p tsconfig.json",
-    "build:component": "npx webpack --mode=production",
-    "package-zip": "cp -rf package*.json publish.yaml ./dist",
     "test": "jest",
     "test:cov": "jest --coverage",
     "lint": "f2elint scan",
