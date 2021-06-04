@@ -11,10 +11,10 @@ interface IBuildOutput {
 }
 export default class Builder {
     logger: ILogger;
-    private commands;
+    private useDocker;
     private dockerfile;
     projectName: string;
-    constructor(projectName: string, commands: any[], dockerfile: string);
+    constructor(projectName: string, useDocker: boolean, dockerfile: string);
     buildImage(buildInput: IBuildInput): Promise<string>;
     build(buildInput: IBuildInput): Promise<IBuildOutput>;
     buildInDocker({ region, serviceName, serviceProps, functionName, functionProps, verbose, credentials, }: IBuildInput, src: string): Promise<string>;
@@ -22,6 +22,5 @@ export default class Builder {
     codeSkipBuild({ baseDir, codeUri, runtime }: INeedBuild): Promise<boolean>;
     isOnlyDefaultTaskFlow(taskFlows: any): boolean;
     initBuildArtifactDir({ baseDir, serviceName, functionName }: IBuildDir): string;
-    isUseDocker(): boolean;
 }
 export {};

@@ -38,7 +38,7 @@ export default async function generatePwdFile(uid?: number, gid?: number): Promi
   const filePath = path.join('/', 'tmp', `fun_${uid}_${gid}_passwd`);
 
   if (!(await fs.pathExists(filePath))) {
-    const content = passwdContent + `funcrafter:x:${uid}:${gid}::/tmp:/usr/sbin/nologin`;
+    const content = `${passwdContent }funcrafter:x:${uid}:${gid}::/tmp:/usr/sbin/nologin`;
     await fs.writeFile(filePath, content);
   }
 

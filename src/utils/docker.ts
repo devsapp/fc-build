@@ -12,6 +12,7 @@ import { CONTEXT } from './constant';
 import { IServiceProps, IFunctionProps, IObject, ICredentials } from '../interface';
 
 const pkg = require('../../package.json');
+
 DraftLog.into(console);
 
 const docker = new Docker();
@@ -45,7 +46,6 @@ function generateFunctionEnvs(functionProps: IFunctionProps): IObject {
 }
 
 async function createContainer(opts): Promise<any> {
-  const isWin = process.platform === 'win32';
   const isMac = process.platform === 'darwin';
 
   Logger.debug(CONTEXT, `Operating platform: ${process.platform}`);
@@ -120,26 +120,26 @@ function followProgress(stream, onFinished) {
   const barLines = {};
 
   const onProgress = (event) => {
-    let status = event.status;
+    let { status } = event;
 
     if (event.progress) {
       status = `${event.status} ${event.progress}`;
     }
 
     if (event.id) {
-      const id = event.id;
+      const { id } = event;
 
       if (!barLines[id]) {
         // @ts-ignore: 引入 draftlog 注入的方法
         barLines[id] = console.draft();
       }
-      barLines[id](id + ': ' + status);
+      barLines[id](`${id }: ${ status}`);
     } else {
       if (_.has(event, 'aux.ID')) {
-        event.stream = event.aux.ID + '\n';
+        event.stream = `${event.aux.ID }\n`;
       }
       // If there is no id, the line should be wrapped manually.
-      const out = event.status ? event.status + '\n' : event.stream;
+      const out = event.status ? `${event.status }\n` : event.stream;
       process.stdout.write(out);
     }
   };
@@ -254,7 +254,7 @@ interface IMount {
 // todo: 当前只支持目录以及 jar。 code uri 还可能是 oss 地址、目录、jar、zip?
 export async function resolveCodeUriToMount(
   absCodeUri: string,
-  readOnly: boolean = true,
+  readOnly = true,
 ): Promise<IMount> {
   let target = null;
 

@@ -6,3 +6,4 @@ test/
 **/*-min.js
 **/*.bundle.js
 src/utils/ncp.ts
+examples/

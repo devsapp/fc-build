@@ -1,5 +1,4 @@
 export declare const SUPPORTRUNTIMEBUILDList: string[];
-export declare const BUILDCOMMANDList: string[];
 export declare const CONTEXT = "FC-BUILD";
 export declare const CONTEXT_NAME = "fc-build";
 export declare const HELP: ({

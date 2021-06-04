@@ -1,5 +1,4 @@
 import { HLogger, ILogger, reportComponent, getCredential, commandParse, help } from '@serverless-devs/core';
-import _ from 'lodash';
 import Builder from './utils/builder';
 import { IInputs, IBuildInput } from './interface';
 import { CONTEXT, HELP, CONTEXT_NAME } from './utils/constant';
@@ -19,7 +18,7 @@ export default class Build {
     delete inputs.Credentials;
     // @ts-ignore
     delete inputs.credentials;
-    
+
     this.logger.info('Build artifact start...');
     const projectName = inputs.project?.projectName;
     this.logger.debug(`[${projectName}]inputs params: ${JSON.stringify(inputs)}`);
@@ -45,7 +44,7 @@ export default class Build {
     });
 
     const { region, service: serviceProps, function: functionProps } = inputs.props;
-    const runtime = functionProps.runtime;
+    const { runtime } = functionProps;
 
     checkCommands(useDocker, runtime);
 

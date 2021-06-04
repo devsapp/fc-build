@@ -58,9 +58,9 @@ var Build = /** @class */ (function () {
     Build.prototype.build = function (inputs) {
         var _a;
         return __awaiter(this, void 0, void 0, function () {
-            var projectName, apts, _b, _c, commands, _d, dockerfile, h, credentials, _e, region, serviceProps, functionProps, runtime, params, builder, output, buildOutput;
-            return __generator(this, function (_f) {
-                switch (_f.label) {
+            var projectName, apts, _b, useDocker, _c, dockerfile, h, credentials, _d, region, serviceProps, functionProps, runtime, params, builder, output, buildOutput;
+            return __generator(this, function (_e) {
+                switch (_e.label) {
                     case 0:
                         // @ts-ignore
                         delete inputs.Credentials;
@@ -71,30 +71,25 @@ var Build = /** @class */ (function () {
                         this.logger.debug("[" + projectName + "]inputs params: " + JSON.stringify(inputs));
                         apts = {
                             string: ['dockerfile'],
-                            boolean: ['help'],
-                            alias: { dockerfile: 'd', help: 'h' },
+                            boolean: ['help', 'use-docker'],
+                            alias: { dockerfile: 'f', 'use-docker': 'd', help: 'h' },
                         };
-                        _b = core_1.commandParse({ args: inputs.args }, apts).data || {}, _c = _b._, commands = _c === void 0 ? [] : _c, _d = _b.dockerfile, dockerfile = _d === void 0 ? '' : _d, h = _b.h;
+                        _b = core_1.commandParse({ args: inputs.args }, apts).data || {}, useDocker = _b.d, _c = _b.dockerfile, dockerfile = _c === void 0 ? '' : _c, h = _b.h;
                         if (h) {
                             core_1.help(constant_1.HELP);
                             return [2 /*return*/];
                         }
                         return [4 /*yield*/, core_1.getCredential(inputs.project.access)];
                     case 1:
-                        credentials = _f.sent();
+                        credentials = _e.sent();
                         core_1.reportComponent(constant_1.CONTEXT_NAME, {
                             command: 'build',
                             uid: credentials.AccountID,
                             remark: 'fc build',
                         });
-                        _e = inputs.props, region = _e.region, serviceProps = _e.service, functionProps = _e.function;
+                        _d = inputs.props, region = _d.region, serviceProps = _d.service, functionProps = _d.function;
                         runtime = functionProps.runtime;
-                        try {
-                            utils_1.checkCommands(commands, runtime);
-                        }
-                        catch (e) {
-                            throw e;
-                        }
+                        utils_1.checkCommands(useDocker, runtime);
                         params = {
                             region: region,
                             serviceProps: serviceProps,
@@ -107,13 +102,13 @@ var Build = /** @class */ (function () {
                             serviceName: serviceProps.name,
                             functionName: functionProps.name,
                         };
-                        builder = new builder_1.default(projectName, commands, dockerfile);
+                        builder = new builder_1.default(projectName, useDocker, dockerfile);
                         output = {
                             props: inputs.props,
                         };
                         return [4 /*yield*/, builder.build(params)];
                     case 2:
-                        buildOutput = _f.sent();
+                        buildOutput = _e.sent();
                         this.logger.debug("[" + projectName + "] Build output: " + JSON.stringify(buildOutput));
                         if (buildOutput.buildSaveUri) {
                             output.buildSaveUri = buildOutput.buildSaveUri;
@@ -134,4 +129,4 @@ var Build = /** @class */ (function () {
     return Build;
 }());
 exports.default = Build;
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXguanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi9zcmMvaW5kZXgudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7QUFBQSw4Q0FBNkc7QUFFN0csNERBQXNDO0FBRXRDLDZDQUErRDtBQUMvRCx1Q0FBOEM7QUFROUM7SUFBQTtJQXdFQSxDQUFDO0lBckVPLHFCQUFLLEdBQVgsVUFBWSxNQUFlOzs7Ozs7O3dCQUN6QixhQUFhO3dCQUNiLE9BQU8sTUFBTSxDQUFDLFdBQVcsQ0FBQzt3QkFDMUIsYUFBYTt3QkFDYixPQUFPLE1BQU0sQ0FBQyxXQUFXLENBQUM7d0JBRTFCLElBQUksQ0FBQyxNQUFNLENBQUMsSUFBSSxDQUFDLHlCQUF5QixDQUFDLENBQUM7d0JBQ3RDLFdBQVcsU0FBRyxNQUFNLENBQUMsT0FBTywwQ0FBRSxXQUFXLENBQUM7d0JBQ2hELElBQUksQ0FBQyxNQUFNLENBQUMsS0FBSyxDQUFDLE1BQUksV0FBVyx3QkFBbUIsSUFBSSxDQUFDLFNBQVMsQ0FBQyxNQUFNLENBQUcsQ0FBQyxDQUFDO3dCQUV4RSxJQUFJLEdBQUc7NEJBQ1gsTUFBTSxFQUFFLENBQUMsWUFBWSxDQUFDOzRCQUN0QixPQUFPLEVBQUUsQ0FBQyxNQUFNLENBQUM7NEJBQ2pCLEtBQUssRUFBRSxFQUFFLFVBQVUsRUFBRSxHQUFHLEVBQUUsSUFBSSxFQUFFLEdBQUcsRUFBRTt5QkFDdEMsQ0FBQzt3QkFDSSxLQUNKLG1CQUFZLENBQUMsRUFBRSxJQUFJLEVBQUUsTUFBTSxDQUFDLElBQUksRUFBRSxFQUFFLElBQUksQ0FBQyxDQUFDLElBQUksSUFBSSxFQUFFLEVBRDlDLFNBQWdCLEVBQWIsUUFBUSxtQkFBRyxFQUFFLEtBQUEsRUFBRSxrQkFBZSxFQUFmLFVBQVUsbUJBQUcsRUFBRSxLQUFBLEVBQUUsQ0FBQyxPQUFBLENBQ1c7d0JBRXZELElBQUksQ0FBQyxFQUFFOzRCQUNMLFdBQUksQ0FBQyxlQUFJLENBQUMsQ0FBQzs0QkFDWCxzQkFBTzt5QkFDUjt3QkFFbUIscUJBQU0sb0JBQWEsQ0FBQyxNQUFNLENBQUMsT0FBTyxDQUFDLE1BQU0sQ0FBQyxFQUFBOzt3QkFBeEQsV0FBVyxHQUFHLFNBQTBDO3dCQUM5RCxzQkFBZSxDQUFDLHVCQUFZLEVBQUU7NEJBQzVCLE9BQU8sRUFBRSxPQUFPOzRCQUNoQixHQUFHLEVBQUUsV0FBVyxDQUFDLFNBQVM7NEJBQzFCLE1BQU0sRUFBRSxVQUFVO3lCQUNuQixDQUFDLENBQUM7d0JBRUcsS0FBNkQsTUFBTSxDQUFDLEtBQUssRUFBdkUsTUFBTSxZQUFBLEVBQVcsWUFBWSxhQUFBLEVBQVksYUFBYSxjQUFBLENBQWtCO3dCQUMxRSxPQUFPLEdBQUcsYUFBYSxDQUFDLE9BQU8sQ0FBQzt3QkFFdEMsSUFBSTs0QkFDRixxQkFBYSxDQUFDLFFBQVEsRUFBRSxPQUFPLENBQUMsQ0FBQzt5QkFDbEM7d0JBQUMsT0FBTyxDQUFDLEVBQUU7NEJBQ1YsTUFBTSxDQUFDLENBQUM7eUJBQ1Q7d0JBRUssTUFBTSxHQUFnQjs0QkFDMUIsTUFBTSxRQUFBOzRCQUNOLFlBQVksY0FBQTs0QkFDWixhQUFhLGVBQUE7NEJBQ2IsV0FBVyxFQUFFO2dDQUNYLFNBQVMsRUFBRSxFQUFFO2dDQUNiLFdBQVcsRUFBRSxFQUFFO2dDQUNmLGVBQWUsRUFBRSxFQUFFOzZCQUNwQjs0QkFDRCxXQUFXLEVBQUUsWUFBWSxDQUFDLElBQUk7NEJBQzlCLFlBQVksRUFBRSxhQUFhLENBQUMsSUFBSTt5QkFDakMsQ0FBQzt3QkFFSSxPQUFPLEdBQUcsSUFBSSxpQkFBTyxDQUFDLFdBQVcsRUFBRSxRQUFRLEVBQUUsVUFBVSxDQUFDLENBQUM7d0JBRXpELE1BQU0sR0FBWTs0QkFDdEIsS0FBSyxFQUFFLE1BQU0sQ0FBQyxLQUFLO3lCQUNwQixDQUFDO3dCQUVrQixxQkFBTSxPQUFPLENBQUMsS0FBSyxDQUFDLE1BQU0sQ0FBQyxFQUFBOzt3QkFBekMsV0FBVyxHQUFHLFNBQTJCO3dCQUMvQyxJQUFJLENBQUMsTUFBTSxDQUFDLEtBQUssQ0FBQyxNQUFJLFdBQVcsd0JBQW1CLElBQUksQ0FBQyxTQUFTLENBQUMsV0FBVyxDQUFHLENBQUMsQ0FBQzt3QkFDbkYsSUFBSSxXQUFXLENBQUMsWUFBWSxFQUFFOzRCQUM1QixNQUFNLENBQUMsWUFBWSxHQUFHLFdBQVcsQ0FBQyxZQUFZLENBQUM7eUJBQ2hEOzZCQUFNOzRCQUNMLE1BQU0sQ0FBQyxLQUFLLEdBQUcsV0FBVyxDQUFDLEtBQUssQ0FBQzt5QkFDbEM7d0JBRUQsSUFBSSxDQUFDLE1BQU0sQ0FBQyxJQUFJLENBQUMsOEJBQThCLENBQUMsQ0FBQzt3QkFDakQsc0JBQU8sTUFBTSxFQUFDOzs7O0tBQ2Y7SUF0RWlCO1FBQWpCLGNBQU8sQ0FBQyxrQkFBTyxDQUFDOzt5Q0FBaUI7SUF1RXBDLFlBQUM7Q0FBQSxBQXhFRCxJQXdFQztrQkF4RW9CLEtBQUsifQ==
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXguanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi9zcmMvaW5kZXgudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7QUFBQSw4Q0FBNkc7QUFDN0csNERBQXNDO0FBRXRDLDZDQUErRDtBQUMvRCx1Q0FBOEM7QUFROUM7SUFBQTtJQW9FQSxDQUFDO0lBakVPLHFCQUFLLEdBQVgsVUFBWSxNQUFlOzs7Ozs7O3dCQUN6QixhQUFhO3dCQUNiLE9BQU8sTUFBTSxDQUFDLFdBQVcsQ0FBQzt3QkFDMUIsYUFBYTt3QkFDYixPQUFPLE1BQU0sQ0FBQyxXQUFXLENBQUM7d0JBRTFCLElBQUksQ0FBQyxNQUFNLENBQUMsSUFBSSxDQUFDLHlCQUF5QixDQUFDLENBQUM7d0JBQ3RDLFdBQVcsU0FBRyxNQUFNLENBQUMsT0FBTywwQ0FBRSxXQUFXLENBQUM7d0JBQ2hELElBQUksQ0FBQyxNQUFNLENBQUMsS0FBSyxDQUFDLE1BQUksV0FBVyx3QkFBbUIsSUFBSSxDQUFDLFNBQVMsQ0FBQyxNQUFNLENBQUcsQ0FBQyxDQUFDO3dCQUV4RSxJQUFJLEdBQUc7NEJBQ1gsTUFBTSxFQUFFLENBQUMsWUFBWSxDQUFDOzRCQUN0QixPQUFPLEVBQUUsQ0FBQyxNQUFNLEVBQUUsWUFBWSxDQUFDOzRCQUMvQixLQUFLLEVBQUUsRUFBRSxVQUFVLEVBQUUsR0FBRyxFQUFFLFlBQVksRUFBRSxHQUFHLEVBQUUsSUFBSSxFQUFFLEdBQUcsRUFBRTt5QkFDekQsQ0FBQzt3QkFDSSxLQUNKLG1CQUFZLENBQUMsRUFBRSxJQUFJLEVBQUUsTUFBTSxDQUFDLElBQUksRUFBRSxFQUFFLElBQUksQ0FBQyxDQUFDLElBQUksSUFBSSxFQUFFLEVBRDNDLFNBQVMsT0FBQSxFQUFFLGtCQUFlLEVBQWYsVUFBVSxtQkFBRyxFQUFFLEtBQUEsRUFBRSxDQUFDLE9BQUEsQ0FDZTt3QkFFdkQsSUFBSSxDQUFDLEVBQUU7NEJBQ0wsV0FBSSxDQUFDLGVBQUksQ0FBQyxDQUFDOzRCQUNYLHNCQUFPO3lCQUNSO3dCQUVtQixxQkFBTSxvQkFBYSxDQUFDLE1BQU0sQ0FBQyxPQUFPLENBQUMsTUFBTSxDQUFDLEVBQUE7O3dCQUF4RCxXQUFXLEdBQUcsU0FBMEM7d0JBQzlELHNCQUFlLENBQUMsdUJBQVksRUFBRTs0QkFDNUIsT0FBTyxFQUFFLE9BQU87NEJBQ2hCLEdBQUcsRUFBRSxXQUFXLENBQUMsU0FBUzs0QkFDMUIsTUFBTSxFQUFFLFVBQVU7eUJBQ25CLENBQUMsQ0FBQzt3QkFFRyxLQUE2RCxNQUFNLENBQUMsS0FBSyxFQUF2RSxNQUFNLFlBQUEsRUFBVyxZQUFZLGFBQUEsRUFBWSxhQUFhLGNBQUEsQ0FBa0I7d0JBQ3hFLE9BQU8sR0FBSyxhQUFhLFFBQWxCLENBQW1CO3dCQUVsQyxxQkFBYSxDQUFDLFNBQVMsRUFBRSxPQUFPLENBQUMsQ0FBQzt3QkFFNUIsTUFBTSxHQUFnQjs0QkFDMUIsTUFBTSxRQUFBOzRCQUNOLFlBQVksY0FBQTs0QkFDWixhQUFhLGVBQUE7NEJBQ2IsV0FBVyxFQUFFO2dDQUNYLFNBQVMsRUFBRSxFQUFFO2dDQUNiLFdBQVcsRUFBRSxFQUFFO2dDQUNmLGVBQWUsRUFBRSxFQUFFOzZCQUNwQjs0QkFDRCxXQUFXLEVBQUUsWUFBWSxDQUFDLElBQUk7NEJBQzlCLFlBQVksRUFBRSxhQUFhLENBQUMsSUFBSTt5QkFDakMsQ0FBQzt3QkFFSSxPQUFPLEdBQUcsSUFBSSxpQkFBTyxDQUFDLFdBQVcsRUFBRSxTQUFTLEVBQUUsVUFBVSxDQUFDLENBQUM7d0JBRTFELE1BQU0sR0FBWTs0QkFDdEIsS0FBSyxFQUFFLE1BQU0sQ0FBQyxLQUFLO3lCQUNwQixDQUFDO3dCQUVrQixxQkFBTSxPQUFPLENBQUMsS0FBSyxDQUFDLE1BQU0sQ0FBQyxFQUFBOzt3QkFBekMsV0FBVyxHQUFHLFNBQTJCO3dCQUMvQyxJQUFJLENBQUMsTUFBTSxDQUFDLEtBQUssQ0FBQyxNQUFJLFdBQVcsd0JBQW1CLElBQUksQ0FBQyxTQUFTLENBQUMsV0FBVyxDQUFHLENBQUMsQ0FBQzt3QkFDbkYsSUFBSSxXQUFXLENBQUMsWUFBWSxFQUFFOzRCQUM1QixNQUFNLENBQUMsWUFBWSxHQUFHLFdBQVcsQ0FBQyxZQUFZLENBQUM7eUJBQ2hEOzZCQUFNOzRCQUNMLE1BQU0sQ0FBQyxLQUFLLEdBQUcsV0FBVyxDQUFDLEtBQUssQ0FBQzt5QkFDbEM7d0JBRUQsSUFBSSxDQUFDLE1BQU0sQ0FBQyxJQUFJLENBQUMsOEJBQThCLENBQUMsQ0FBQzt3QkFDakQsc0JBQU8sTUFBTSxFQUFDOzs7O0tBQ2Y7SUFsRWlCO1FBQWpCLGNBQU8sQ0FBQyxrQkFBTyxDQUFDOzt5Q0FBaUI7SUFtRXBDLFlBQUM7Q0FBQSxBQXBFRCxJQW9FQztrQkFwRW9CLEtBQUsifQ==

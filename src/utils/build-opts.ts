@@ -6,6 +6,7 @@ import { addEnv } from './env';
 import { IServiceProps, IFunctionProps, ICredentials } from '../interface';
 
 const pkg = require('../../package.json');
+
 const { FC_DOCKER_VERSION } = process.env;
 
 const IMAGE_VERSION = FC_DOCKER_VERSION || pkg['fc-docker'].version || '1.9.2';

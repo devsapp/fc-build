@@ -54,20 +54,16 @@ export default class Builder {
       throw new Error(errorMessage);
     }
 
-    try {
-      this.logger.info('Building image...');
-      execSync(`docker build -t ${imageName} -f ${dockerFileName} .`, {
-        stdio: 'inherit',
-      });
-      this.logger.log(`Build image(${imageName}) successfully`);
-      return imageName;
-    } catch (e) {
-      throw e;
-    }
+    this.logger.info('Building image...');
+    execSync(`docker build -t ${imageName} -f ${dockerFileName} .`, {
+      stdio: 'inherit',
+    });
+    this.logger.log(`Build image(${imageName}) successfully`);
+    return imageName;
   }
 
   async build(buildInput: IBuildInput): Promise<IBuildOutput> {
-    const useDocker = this.useDocker;
+    const { useDocker } = this;
     if (useDocker) {
       this.logger.info('Use docker for building.');
     }
@@ -136,7 +132,7 @@ export default class Builder {
 
     const usedImage = opts.Image;
 
-    this.logger.info('Build function using image: ' + usedImage);
+    this.logger.info(`Build function using image: ${ usedImage}`);
 
     const exitRs = await dockerRun(opts);
     if (exitRs.StatusCode !== 0) {

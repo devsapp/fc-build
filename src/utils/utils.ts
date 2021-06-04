@@ -1,10 +1,10 @@
 import { Logger } from '@serverless-devs/core';
-import { CONTEXT } from './constant';
+import { CONTEXT, SUPPORTRUNTIMEBUILDList } from './constant';
 import _ from 'lodash';
 import path from 'path';
 import readline from 'readline';
 import fs from 'fs-extra';
-import { SUPPORTRUNTIMEBUILDList } from './constant';
+
 import { ICodeUri, IBuildDir, IObject } from '../interface';
 
 const BUILDARTIFACTS = path.join('.s', 'build', 'artifacts');
@@ -123,7 +123,7 @@ export async function resolveLibPathsFromLdConf(
   const libPaths: any = await resolveLibPaths(confdPath);
 
   if (!_.isEmpty(libPaths)) {
-    envs.LD_LIBRARY_PATH = libPaths.map((path) => `/code/.s/root${path}`).join(':');
+    envs.LD_LIBRARY_PATH = libPaths.map((p) => `/code/.s/root${p}`).join(':');
   }
   return envs;
 }
