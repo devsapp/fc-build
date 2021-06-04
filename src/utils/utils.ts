@@ -4,7 +4,7 @@ import _ from 'lodash';
 import path from 'path';
 import readline from 'readline';
 import fs from 'fs-extra';
-import { SUPPORTRUNTIMEBUILDList, BUILDCOMMANDList } from './constant';
+import { SUPPORTRUNTIMEBUILDList } from './constant';
 import { ICodeUri, IBuildDir, IObject } from '../interface';
 
 const BUILDARTIFACTS = path.join('.s', 'build', 'artifacts');
@@ -34,23 +34,12 @@ export function isCopyCodeBuildRuntime(runtime: string): boolean {
   return false;
 }
 
-export function checkCommands(commands: string[], runtime: string) {
-  if (_.isEmpty(commands)) {
-    throw new Error("Input error, use 's build --help' for info.");
-  }
-
-  const buildCommand = commands[0];
-  if (!_.includes(BUILDCOMMANDList, buildCommand)) {
-    const errorMessage = `Install command error, unknown subcommand '${buildCommand}', use 's build --help' for info.`;
-    throw new Error(errorMessage);
-  }
-
+export function checkCommands(useDocker: boolean, runtime: string) {
   if (!runtime) {
     throw new Error('runtime required.');
   }
 
-  const notIsUseDocker = buildCommand !== 'docker';
-  if (notIsUseDocker && runtime === 'custom-container') {
+  if (!useDocker && runtime === 'custom-container') {
     const errorMessage = `'${runtime}' needs to pass the 's build docker' command.`;
     throw new Error(errorMessage);
   }

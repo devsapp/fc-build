@@ -24,13 +24,13 @@ interface IBuildOutput {
 export default class Builder {
   @HLogger(CONTEXT) logger: ILogger;
 
-  private commands: any;
+  private useDocker: boolean;
   private dockerfile: string;
   projectName: string;
 
-  constructor(projectName: string, commands: any[], dockerfile: string) {
+  constructor(projectName: string, useDocker: boolean, dockerfile: string) {
     this.projectName = projectName;
-    this.commands = commands;
+    this.useDocker = useDocker;
     this.dockerfile = dockerfile;
   }
 
@@ -67,7 +67,7 @@ export default class Builder {
   }
 
   async build(buildInput: IBuildInput): Promise<IBuildOutput> {
-    const useDocker = this.isUseDocker();
+    const useDocker = this.useDocker;
     if (useDocker) {
       this.logger.info('Use docker for building.');
     }
@@ -228,9 +228,5 @@ export default class Builder {
     fs.mkdirpSync(artifactPath);
     this.logger.debug(`[${this.projectName}] Created build folder successfully.`);
     return artifactPath;
-  }
-
-  isUseDocker(): boolean {
-    return this.commands[0] === 'docker';
   }
 }

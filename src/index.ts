@@ -26,10 +26,10 @@ export default class Build {
 
     const apts = {
       string: ['dockerfile'],
-      boolean: ['help'],
-      alias: { dockerfile: 'd', help: 'h' },
+      boolean: ['help', 'use-docker'],
+      alias: { dockerfile: 'f', 'use-docker': 'd', help: 'h' },
     };
-    const { _: commands = [], dockerfile = '', h }: any =
+    const { d: useDocker, dockerfile = '', h }: any =
       commandParse({ args: inputs.args }, apts).data || {};
 
     if (h) {
@@ -47,11 +47,7 @@ export default class Build {
     const { region, service: serviceProps, function: functionProps } = inputs.props;
     const runtime = functionProps.runtime;
 
-    try {
-      checkCommands(commands, runtime);
-    } catch (e) {
-      throw e;
-    }
+    checkCommands(useDocker, runtime);
 
     const params: IBuildInput = {
       region,
@@ -66,7 +62,7 @@ export default class Build {
       functionName: functionProps.name,
     };
 
-    const builder = new Builder(projectName, commands, dockerfile);
+    const builder = new Builder(projectName, useDocker, dockerfile);
 
     const output: IOutput = {
       props: inputs.props,

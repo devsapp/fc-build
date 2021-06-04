@@ -1,7 +1,5 @@
 export const SUPPORTRUNTIMEBUILDList = ['nodejs', 'python', 'php', 'custom'];
 
-export const BUILDCOMMANDList = ['docker', 'local'];
-
 export const CONTEXT = 'FC-BUILD';
 export const CONTEXT_NAME = 'fc-build';
 
@@ -12,6 +10,13 @@ export const HELP = [
       {
         name: 'dockerfile',
         description: '指定 dockerfile 路径',
+        alias: 'f',
+        defaultOption: false,
+        type: String,
+      },
+      {
+        name: 'use-docker',
+        description: '使用 docker 构建',
         alias: 'd',
         defaultOption: false,
         type: String,
@@ -28,10 +33,7 @@ export const HELP = [
     header: 'Examples',
     content: [
       {
-        example: '$ s exec -- build local',
-      },
-      {
-        example: '$ s exec -- build docker',
+        example: '$ s exec -- build --use-docker',
       },
     ],
   },
