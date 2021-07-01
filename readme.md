@@ -24,9 +24,9 @@
 | name  | true | string  | - | 函数名称  |  -  |
 | runtime  | true | string  | nodejs6、nodejs8、nodejs10、nodejs12、python2.7、python3、dotnetcore2.1、php7.2、java8、python3、python2.7、custom-container | 运行时  |  -  |
 | codeUri  | false | string  | - | 代码路径  |  如果runtime不为custom-container则必填  |
-| customContainer  | false | struct  | - | 自定义镜像  |   如果runtime为custom-container则必填  |
+| customContainerConfig  | false | struct  | - | 自定义镜像  |   如果runtime为custom-container则必填  |
 
-#### customContainer
+#### customContainerConfig
 
 |  参数   |  必填  |  类型  | 取值  |  描述  |  备注  |    
 |  ----  | ----  |  ----  | ----  |  ----  |  ----  |

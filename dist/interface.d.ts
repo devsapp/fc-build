@@ -44,7 +44,7 @@ export interface IFunctionProps {
     environmentVariables?: {
         [key: string]: any;
     };
-    customContainer?: {
+    customContainerConfig?: {
         image: string;
         command?: string;
         args?: string;

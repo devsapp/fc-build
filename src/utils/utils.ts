@@ -40,7 +40,7 @@ export function checkCommands(useDocker: boolean, runtime: string) {
   }
 
   if (!useDocker && runtime === 'custom-container') {
-    const errorMessage = `'${runtime}' needs to pass the 's build docker' command.`;
+    const errorMessage = `'${runtime}' needs to pass the 's build --use-docker' command.`;
     throw new Error(errorMessage);
   }
 }

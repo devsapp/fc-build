@@ -35,9 +35,9 @@ export default class Builder {
   }
 
   async buildImage(buildInput: IBuildInput): Promise<string> {
-    const { customContainer } = buildInput.functionProps;
+    const { customContainerConfig } = buildInput.functionProps;
 
-    if (!customContainer) {
+    if (!customContainerConfig) {
       const errorMessage = "No 'CustomContainer' configuration found in Function.";
       throw new Error(errorMessage);
     }
@@ -48,7 +48,7 @@ export default class Builder {
       throw new Error(errorMessage);
     }
 
-    const imageName = customContainer.image;
+    const imageName = customContainerConfig.image;
     if (!imageName) {
       const errorMessage = 'Function/CustomContainer/Image required.';
       throw new Error(errorMessage);
@@ -161,7 +161,7 @@ export default class Builder {
     const fcfilePath = path.resolve(codePath, 'fcfile');
     if (fs.existsSync(fcfilePath)) {
       this.logger.log(
-        "Found fcfile in src directory, maybe you want to use 's build docker' ?",
+        "Found fcfile in src directory, maybe you want to use 's build --use-docker' ?",
         'yellow',
       );
     }
