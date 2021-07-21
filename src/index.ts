@@ -1,9 +1,11 @@
-import { HLogger, ILogger, reportComponent, getCredential, commandParse, help } from '@serverless-devs/core';
+import { reportComponent, commandParse, help } from '@serverless-devs/core';
 import Builder from './utils/builder';
 import { IInputs, IBuildInput } from './interface';
 import { CONTEXT, HELP, CONTEXT_NAME } from './utils/constant';
 import { checkCommands } from './utils/utils';
+import Logger from './common/logger';
 
+Logger.setContent(CONTEXT);
 interface IOutput {
   props: any;
   image?: string;
@@ -11,17 +13,11 @@ interface IOutput {
 }
 
 export default class Build {
-  @HLogger(CONTEXT) logger: ILogger;
 
   async build(inputs: IInputs) {
-    // @ts-ignore
-    delete inputs.Credentials;
-    // @ts-ignore
-    delete inputs.credentials;
-
-    this.logger.info('Build artifact start...');
+    Logger.info('Build artifact start...');
     const projectName = inputs.project?.projectName;
-    this.logger.debug(`[${projectName}]inputs params: ${JSON.stringify(inputs)}`);
+    Logger.debug(`[${projectName}]inputs params: ${JSON.stringify(inputs.props)}`);
 
     const apts = {
       string: ['dockerfile'],
@@ -36,10 +32,9 @@ export default class Build {
       return;
     }
 
-    const credentials = await getCredential(inputs.project.access);
     reportComponent(CONTEXT_NAME, {
       command: 'build',
-      uid: credentials.AccountID,
+      uid: inputs.credentials?.AccountID,
       remark: 'fc build',
     });
 
@@ -68,14 +63,14 @@ export default class Build {
     };
 
     const buildOutput = await builder.build(params);
-    this.logger.debug(`[${projectName}] Build output: ${JSON.stringify(buildOutput)}`);
+    Logger.debug(`[${projectName}] Build output: ${JSON.stringify(buildOutput)}`);
     if (buildOutput.buildSaveUri) {
       output.buildSaveUri = buildOutput.buildSaveUri;
     } else {
       output.image = buildOutput.image;
     }
 
-    this.logger.info('Build artifact successfully.');
+    Logger.info('Build artifact successfully.');
     return output;
   }
 }

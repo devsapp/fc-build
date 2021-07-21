@@ -5,10 +5,11 @@ import _ from 'lodash';
 import fcBuilders from '@alicloud/fc-builders';
 import { execSync } from 'child_process';
 import { checkCodeUri, getArtifactPath, getExcludeFilesEnv } from './utils';
-import generateBuildContainerBuildOpts from './build-opts';
+import { generateBuildContainerBuildOpts } from './build-opts';
 import { dockerRun } from './docker';
 import { CONTEXT } from './constant';
 import { IBuildInput, ICodeUri, IBuildDir } from '../interface';
+import { getFunfile } from './install-file';
 
 interface INeedBuild {
   baseDir: string;
@@ -88,7 +89,7 @@ export default class Builder {
     }
 
     let buildSaveUri: string;
-    if (useDocker) {
+    if (useDocker || await getFunfile(src)) {
       buildSaveUri = await this.buildInDocker(buildInput, src);
     } else {
       buildSaveUri = await this.buildArtifact(buildInput, src);
