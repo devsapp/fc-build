@@ -3,6 +3,7 @@ export interface IInputs {
     appName: string;
     args: string;
     path: any;
+    credentials: ICredentials;
     project: {
         component: string;
         access: string;

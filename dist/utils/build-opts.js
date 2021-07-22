@@ -58,31 +58,18 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.generateBuildContainerBuildOpts = void 0;
 var lodash_1 = __importDefault(require("lodash"));
 var path_1 = __importDefault(require("path"));
 var nested_object_assign_1 = __importDefault(require("nested-object-assign"));
 var docker = __importStar(require("./docker"));
+var get_image_name_1 = require("./get-image-name");
+var install_file_1 = require("./install-file");
 var env_1 = require("./env");
-var pkg = require('../../package.json');
-var FC_DOCKER_VERSION = process.env.FC_DOCKER_VERSION;
-var IMAGE_VERSION = FC_DOCKER_VERSION || pkg['fc-docker'].version || '1.9.2';
-var DEFAULT_REGISTRY = pkg['fc-docker'].registry_default || 'registry.hub.docker.com';
-var runtimeImageMap = {
-    nodejs6: 'nodejs6',
-    nodejs8: 'nodejs8',
-    nodejs10: 'nodejs10',
-    nodejs12: 'nodejs12',
-    'python2.7': 'python2.7',
-    python3: 'python3.6',
-    java8: 'java8',
-    'php7.2': 'php7.2',
-    'dotnetcore2.1': 'dotnetcore2.1',
-    custom: 'custom',
-};
 function generateBuildContainerBuildOpts(_a) {
     var credentials = _a.credentials, region = _a.region, serviceName = _a.serviceName, serviceProps = _a.serviceProps, functionName = _a.functionName, functionProps = _a.functionProps, baseDir = _a.baseDir, codeUri = _a.codeUri, funcArtifactDir = _a.funcArtifactDir, verbose = _a.verbose, stages = _a.stages;
     return __awaiter(this, void 0, void 0, function () {
-        var runtime, containerName, envs, codeMount, passwdMount, funcArtifactMountDir, artifactDirMount, mounts, params, cmd, opts;
+        var runtime, containerName, envs, codeMount, passwdMount, funcArtifactMountDir, artifactDirMount, mounts, params, cmd, imageName, filePath, opts;
         return __generator(this, function (_b) {
             switch (_b.label) {
                 case 0:
@@ -124,20 +111,28 @@ function generateBuildContainerBuildOpts(_a) {
                         verbose: verbose,
                     };
                     cmd = ['fun-install', 'build', '--json-params', JSON.stringify(params)];
-                    return [4 /*yield*/, generateContainerBuildOpts(runtime, containerName, mounts, cmd, envs)];
+                    return [4 /*yield*/, install_file_1.getFunfile(codeUri)];
                 case 4:
+                    filePath = _b.sent();
+                    if (!filePath) return [3 /*break*/, 6];
+                    return [4 /*yield*/, install_file_1.processFunfile(serviceName, codeUri, filePath, funcArtifactDir, runtime, functionName)];
+                case 5:
+                    imageName = _b.sent();
+                    _b.label = 6;
+                case 6: return [4 /*yield*/, generateContainerBuildOpts(runtime, containerName, mounts, cmd, envs, imageName)];
+                case 7:
                     opts = _b.sent();
                     return [2 /*return*/, opts];
             }
         });
     });
 }
-exports.default = generateBuildContainerBuildOpts;
-function generateContainerBuildOpts(runtime, containerName, mounts, cmd, envs) {
+exports.generateBuildContainerBuildOpts = generateBuildContainerBuildOpts;
+function generateContainerBuildOpts(runtime, containerName, mounts, cmd, envs, imageName) {
     return __awaiter(this, void 0, void 0, function () {
-        var hostOpts, ioOpts, imageName, opts;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
+        var hostOpts, ioOpts, opts, _a, _b, _c;
+        return __generator(this, function (_d) {
+            switch (_d.label) {
                 case 0:
                     hostOpts = {
                         HostConfig: {
@@ -153,16 +148,23 @@ function generateContainerBuildOpts(runtime, containerName, mounts, cmd, envs) {
                         AttachStdout: true,
                         AttachStderr: true,
                     };
-                    return [4 /*yield*/, resolveRuntimeToDockerImage(runtime)];
+                    _a = nested_object_assign_1.default;
+                    _b = {
+                        Env: resolveDockerEnv(envs)
+                    };
+                    _c = imageName;
+                    if (_c) return [3 /*break*/, 2];
+                    return [4 /*yield*/, get_image_name_1.resolveRuntimeToDockerImage(runtime)];
                 case 1:
-                    imageName = _a.sent();
-                    opts = nested_object_assign_1.default({
-                        Env: resolveDockerEnv(envs),
-                        Image: imageName,
-                        name: containerName,
-                        Cmd: cmd,
-                        User: resolveDockerUser(),
-                    }, ioOpts, hostOpts);
+                    _c = (_d.sent());
+                    _d.label = 2;
+                case 2:
+                    opts = _a.apply(void 0, [(_b.Image = _c,
+                            _b.name = containerName,
+                            _b.Cmd = cmd,
+                            _b.User = resolveDockerUser(),
+                            _b), ioOpts,
+                        hostOpts]);
                     return [2 /*return*/, opts];
             }
         });
@@ -177,22 +179,8 @@ function resolveDockerUser() {
     }
     return userId + ":" + groupId;
 }
-function resolveRuntimeToDockerImage(runtime) {
-    return __awaiter(this, void 0, void 0, function () {
-        var name_1, imageName, errorMessage;
-        return __generator(this, function (_a) {
-            if (runtimeImageMap[runtime]) {
-                name_1 = runtimeImageMap[runtime];
-                imageName = DEFAULT_REGISTRY + "/aliyunfc/runtime-" + name_1 + ":build-" + IMAGE_VERSION;
-                return [2 /*return*/, imageName];
-            }
-            errorMessage = "resolveRuntimeToDockerImage: invalid runtime name " + runtime + ". Supported list: " + Object.keys(runtimeImageMap);
-            throw new Error(errorMessage);
-        });
-    });
-}
 function resolveDockerEnv(envs) {
     if (envs === void 0) { envs = {}; }
     return lodash_1.default.map(env_1.addEnv(envs || {}), function (v, k) { return k + "=" + v; });
 }
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiYnVpbGQtb3B0cy5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uL3NyYy91dGlscy9idWlsZC1vcHRzLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7OztBQUFBLGtEQUF1QjtBQUN2Qiw4Q0FBd0I7QUFDeEIsOEVBQXNEO0FBQ3RELCtDQUFtQztBQUNuQyw2QkFBK0I7QUFHL0IsSUFBTSxHQUFHLEdBQUcsT0FBTyxDQUFDLG9CQUFvQixDQUFDLENBQUM7QUFFbEMsSUFBQSxpQkFBaUIsR0FBSyxPQUFPLENBQUMsR0FBRyxrQkFBaEIsQ0FBaUI7QUFFMUMsSUFBTSxhQUFhLEdBQUcsaUJBQWlCLElBQUksR0FBRyxDQUFDLFdBQVcsQ0FBQyxDQUFDLE9BQU8sSUFBSSxPQUFPLENBQUM7QUFDL0UsSUFBTSxnQkFBZ0IsR0FBRyxHQUFHLENBQUMsV0FBVyxDQUFDLENBQUMsZ0JBQWdCLElBQUkseUJBQXlCLENBQUM7QUFDeEYsSUFBTSxlQUFlLEdBQUc7SUFDdEIsT0FBTyxFQUFFLFNBQVM7SUFDbEIsT0FBTyxFQUFFLFNBQVM7SUFDbEIsUUFBUSxFQUFFLFVBQVU7SUFDcEIsUUFBUSxFQUFFLFVBQVU7SUFDcEIsV0FBVyxFQUFFLFdBQVc7SUFDeEIsT0FBTyxFQUFFLFdBQVc7SUFDcEIsS0FBSyxFQUFFLE9BQU87SUFDZCxRQUFRLEVBQUUsUUFBUTtJQUNsQixlQUFlLEVBQUUsZUFBZTtJQUNoQyxNQUFNLEVBQUUsUUFBUTtDQUNqQixDQUFDO0FBZ0JGLFNBQThCLCtCQUErQixDQUFDLEVBWWpEO1FBWFgsV0FBVyxpQkFBQSxFQUNYLE1BQU0sWUFBQSxFQUNOLFdBQVcsaUJBQUEsRUFDWCxZQUFZLGtCQUFBLEVBQ1osWUFBWSxrQkFBQSxFQUNaLGFBQWEsbUJBQUEsRUFDYixPQUFPLGFBQUEsRUFDUCxPQUFPLGFBQUEsRUFDUCxlQUFlLHFC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
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiYnVpbGQtb3B0cy5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uL3NyYy91dGlscy9idWlsZC1vcHRzLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7QUFBQSxrREFBdUI7QUFDdkIsOENBQXdCO0FBQ3hCLDhFQUFzRDtBQUN0RCwrQ0FBbUM7QUFFbkMsbURBQStEO0FBQy9ELCtDQUE0RDtBQUM1RCw2QkFBK0I7QUFnQi9CLFNBQXNCLCtCQUErQixDQUFDLEVBWXpDO1FBWFgsV0FBVyxpQkFBQSxFQUNYLE1BQU0sWUFBQSxFQUNOLFdBQVcsaUJBQUEsRUFDWCxZQUFZLGtCQUFBLEVBQ1osWUFBWSxrQkFBQSxFQUNaLGFBQWEsbUJBQUEsRUFDYixPQUFPLGFBQUEsRUFDUCxPQUFPLGFBQUEsRUFDUCxlQUFlLHFCQUFBLEVBQ2YsT0FBTyxhQUFBLEVBQ1AsTUFBTSxZQUFBOzs7Ozs7b0JBRUUsT0FBTyxHQUFLLGFBQWEsUUFBbEIsQ0FBbUI7b0JBRTVCLGFBQWEsR0FBRyxNQUFNLENBQUMsMkJBQTJCLEVBQUUsQ0FBQztvQkFFOUMscUJBQU0sTUFBTSxDQUFDLGtCQUFrQixDQUFDOzRCQUMzQyxNQUFNLFFBQUE7NEJBQ04sT0FBTyxTQUFBOzRCQUNQLFdBQVcsYUFBQTs0QkFDWCxZQUFZLGNBQUE7NEJBQ1osWUFBWSxjQUFBOzRCQUNaLFdBQVcsYUFBQTs0QkFDWCxhQUFhLGVBQUE7eUJBQ2QsQ0FBQyxFQUFBOztvQkFSSSxJQUFJLEdBQUcsU0FRWDtvQkFFZ0IscUJBQU0sTUFBTSxDQUFDLHFCQUFxQixDQUFDLGNBQUksQ0FBQyxPQUFPLENBQUMsT0FBTyxFQUFFLE9BQU8sQ0FBQyxFQUFFLEtBQUssQ0FBQyxFQUFBOztvQkFBckYsU0FBUyxHQUFHLFNBQXlFO29CQUV2RSxxQkFBTSxNQUFNLENBQUMsa0JBQWtCLEVBQUUsRUFBQTs7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

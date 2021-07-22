@@ -1,0 +1,19 @@
+edition: 1.0.0
+name: buildApp
+access: aliyun-release
+
+services:
+  java-test:
+    # component: fc-build 
+    component: ${path(../..)}
+    props:
+      region: cn-shenzhen
+      service:
+        name: build-test-service
+      function:
+        name: build-test-function
+        handler: example.App::handleRequest
+        initialize: example.App::initialize
+        runtime: java11
+        codeUri: .
+

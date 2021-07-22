@@ -1,13 +1,4 @@
 "use strict";
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -52,42 +43,37 @@ var core_1 = require("@serverless-devs/core");
 var builder_1 = __importDefault(require("./utils/builder"));
 var constant_1 = require("./utils/constant");
 var utils_1 = require("./utils/utils");
+var logger_1 = __importDefault(require("./common/logger"));
+logger_1.default.setContent(constant_1.CONTEXT);
 var Build = /** @class */ (function () {
     function Build() {
     }
     Build.prototype.build = function (inputs) {
-        var _a;
+        var _a, _b;
         return __awaiter(this, void 0, void 0, function () {
-            var projectName, apts, _b, useDocker, _c, dockerfile, h, credentials, _d, region, serviceProps, functionProps, runtime, params, builder, output, buildOutput;
-            return __generator(this, function (_e) {
-                switch (_e.label) {
+            var projectName, apts, _c, useDocker, _d, dockerfile, h, _e, region, serviceProps, functionProps, runtime, params, builder, output, buildOutput;
+            return __generator(this, function (_f) {
+                switch (_f.label) {
                     case 0:
-                        // @ts-ignore
-                        delete inputs.Credentials;
-                        // @ts-ignore
-                        delete inputs.credentials;
-                        this.logger.info('Build artifact start...');
+                        logger_1.default.info('Build artifact start...');
                         projectName = (_a = inputs.project) === null || _a === void 0 ? void 0 : _a.projectName;
-                        this.logger.debug("[" + projectName + "]inputs params: " + JSON.stringify(inputs));
+                        logger_1.default.debug("[" + projectName + "]inputs params: " + JSON.stringify(inputs.props));
                         apts = {
                             string: ['dockerfile'],
                             boolean: ['help', 'use-docker'],
                             alias: { dockerfile: 'f', 'use-docker': 'd', help: 'h' },
                         };
-                        _b = core_1.commandParse({ args: inputs.args }, apts).data || {}, useDocker = _b.d, _c = _b.dockerfile, dockerfile = _c === void 0 ? '' : _c, h = _b.h;
+                        _c = core_1.commandParse({ args: inputs.args }, apts).data || {}, useDocker = _c.d, _d = _c.dockerfile, dockerfile = _d === void 0 ? '' : _d, h = _c.h;
                         if (h) {
                             core_1.help(constant_1.HELP);
                             return [2 /*return*/];
                         }
-                        return [4 /*yield*/, core_1.getCredential(inputs.project.access)];
-                    case 1:
-                        credentials = _e.sent();
                         core_1.reportComponent(constant_1.CONTEXT_NAME, {
                             command: 'build',
-                            uid: credentials.AccountID,
+                            uid: (_b = inputs.credentials) === null || _b === void 0 ? void 0 : _b.AccountID,
                             remark: 'fc build',
                         });
-                        _d = inputs.props, region = _d.region, serviceProps = _d.service, functionProps = _d.function;
+                        _e = inputs.props, region = _e.region, serviceProps = _e.service, functionProps = _e.function;
                         runtime = functionProps.runtime;
                         utils_1.checkCommands(useDocker, runtime);
                         params = {
@@ -107,27 +93,22 @@ var Build = /** @class */ (function () {
                             props: inputs.props,
                         };
                         return [4 /*yield*/, builder.build(params)];
-                    case 2:
-                        buildOutput = _e.sent();
-                        this.logger.debug("[" + projectName + "] Build output: " + JSON.stringify(buildOutput));
+                    case 1:
+                        buildOutput = _f.sent();
+                        logger_1.default.debug("[" + projectName + "] Build output: " + JSON.stringify(buildOutput));
                         if (buildOutput.buildSaveUri) {
                             output.buildSaveUri = buildOutput.buildSaveUri;
                         }
                         else {
                             output.image = buildOutput.image;
                         }
-                        this.logger.info('Build artifact successfully.');
+                        logger_1.default.info('Build artifact successfully.');
                         return [2 /*return*/, output];
                 }
             });
         });
     };
-    var _a;
-    __decorate([
-        core_1.HLogger(constant_1.CONTEXT),
-        __metadata("design:type", typeof (_a = typeof core_1.ILogger !== "undefined" && core_1.ILogger) === "function" ? _a : Object)
-    ], Build.prototype, "logger", void 0);
     return Build;
 }());
 exports.default = Build;
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXguanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi9zcmMvaW5kZXgudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7QUFBQSw4Q0FBNkc7QUFDN0csNERBQXNDO0FBRXRDLDZDQUErRDtBQUMvRCx1Q0FBOEM7QUFROUM7SUFBQTtJQW9FQSxDQUFDO0lBakVPLHFCQUFLLEdBQVgsVUFBWSxNQUFlOzs7Ozs7O3dCQUN6QixhQUFhO3dCQUNiLE9BQU8sTUFBTSxDQUFDLFdBQVcsQ0FBQzt3QkFDMUIsYUFBYTt3QkFDYixPQUFPLE1BQU0sQ0FBQyxXQUFXLENBQUM7d0JBRTFCLElBQUksQ0FBQyxNQUFNLENBQUMsSUFBSSxDQUFDLHlCQUF5QixDQUFDLENBQUM7d0JBQ3RDLFdBQVcsU0FBRyxNQUFNLENBQUMsT0FBTywwQ0FBRSxXQUFXLENBQUM7d0JBQ2hELElBQUksQ0FBQyxNQUFNLENBQUMsS0FBSyxDQUFDLE1BQUksV0FBVyx3QkFBbUIsSUFBSSxDQUFDLFNBQVMsQ0FBQyxNQUFNLENBQUcsQ0FBQyxDQUFDO3dCQUV4RSxJQUFJLEdBQUc7NEJBQ1gsTUFBTSxFQUFFLENBQUMsWUFBWSxDQUFDOzRCQUN0QixPQUFPLEVBQUUsQ0FBQyxNQUFNLEVBQUUsWUFBWSxDQUFDOzRCQUMvQixLQUFLLEVBQUUsRUFBRSxVQUFVLEVBQUUsR0FBRyxFQUFFLFlBQVksRUFBRSxHQUFHLEVBQUUsSUFBSSxFQUFFLEdBQUcsRUFBRTt5QkFDekQsQ0FBQzt3QkFDSSxLQUNKLG1CQUFZLENBQUMsRUFBRSxJQUFJLEVBQUUsTUFBTSxDQUFDLElBQUksRUFBRSxFQUFFLElBQUksQ0FBQyxDQUFDLElBQUksSUFBSSxFQUFFLEVBRDNDLFNBQVMsT0FBQSxFQUFFLGtCQUFlLEVBQWYsVUFBVSxtQkFBRyxFQUFFLEtBQUEsRUFBRSxDQUFDLE9BQUEsQ0FDZTt3QkFFdkQsSUFBSSxDQUFDLEVBQUU7NEJBQ0wsV0FBSSxDQUFDLGVBQUksQ0FBQyxDQUFDOzRCQUNYLHNCQUFPO3lCQUNSO3dCQUVtQixxQkFBTSxvQkFBYSxDQUFDLE1BQU0sQ0FBQyxPQUFPLENBQUMsTUFBTSxDQUFDLEVBQUE7O3dCQUF4RCxXQUFXLEdBQUcsU0FBMEM7d0JBQzlELHNCQUFlLENBQUMsdUJBQVksRUFBRTs0QkFDNUIsT0FBTyxFQUFFLE9BQU87NEJBQ2hCLEdBQUcsRUFBRSxXQUFXLENBQUMsU0FBUzs0QkFDMUIsTUFBTSxFQUFFLFVBQVU7eUJBQ25CLENBQUMsQ0FBQzt3QkFFRyxLQUE2RCxNQUFNLENBQUMsS0FBSyxFQUF2RSxNQUFNLFlBQUEsRUFBVyxZQUFZLGFBQUEsRUFBWSxhQUFhLGNBQUEsQ0FBa0I7d0JBQ3hFLE9BQU8sR0FBSyxhQUFhLFFBQWxCLENBQW1CO3dCQUVsQyxxQkFBYSxDQUFDLFNBQVMsRUFBRSxPQUFPLENBQUMsQ0FBQzt3QkFFNUIsTUFBTSxHQUFnQjs0QkFDMUIsTUFBTSxRQUFBOzRCQUNOLFlBQVksY0FBQTs0QkFDWixhQUFhLGVBQUE7NEJBQ2IsV0FBVyxFQUFFO2dDQUNYLFNBQVMsRUFBRSxFQUFFO2dDQUNiLFdBQVcsRUFBRSxFQUFFO2dDQUNmLGVBQWUsRUFBRSxFQUFFOzZCQUNwQjs0QkFDRCxXQUFXLEVBQUUsWUFBWSxDQUFDLElBQUk7NEJBQzlCLFlBQVksRUFBRSxhQUFhLENBQUMsSUFBSTt5QkFDakMsQ0FBQzt3QkFFSSxPQUFPLEdBQUcsSUFBSSxpQkFBTyxDQUFDLFdBQVcsRUFBRSxTQUFTLEVBQUUsVUFBVSxDQUFDLENBQUM7d0JBRTFELE1BQU0sR0FBWTs0QkFDdEIsS0FBSyxFQUFFLE1BQU0sQ0FBQyxLQUFLO3lCQUNwQixDQUFDO3dCQUVrQixxQkFBTSxPQUFPLENBQUMsS0FBSyxDQUFDLE1BQU0sQ0FBQyxFQUFBOzt3QkFBekMsV0FBVyxHQUFHLFNBQTJCO3dCQUMvQyxJQUFJLENBQUMsTUFBTSxDQUFDLEtBQUssQ0FBQyxNQUFJLFdBQVcsd0JBQW1CLElBQUksQ0FBQyxTQUFTLENBQUMsV0FBVyxDQUFHLENBQUMsQ0FBQzt3QkFDbkYsSUFBSSxXQUFXLENBQUMsWUFBWSxFQUFFOzRCQUM1QixNQUFNLENBQUMsWUFBWSxHQUFHLFdBQVcsQ0FBQyxZQUFZLENBQUM7eUJBQ2hEOzZCQUFNOzRCQUNMLE1BQU0sQ0FBQyxLQUFLLEdBQUcsV0FBVyxDQUFDLEtBQUssQ0FBQzt5QkFDbEM7d0JBRUQsSUFBSSxDQUFDLE1BQU0sQ0FBQyxJQUFJLENBQUMsOEJBQThCLENBQUMsQ0FBQzt3QkFDakQsc0JBQU8sTUFBTSxFQUFDOzs7O0tBQ2Y7O0lBbEVpQjtRQUFqQixjQUFPLENBQUMsa0JBQU8sQ0FBQztzREFBUyxjQUFPLG9CQUFQLGNBQU87eUNBQUM7SUFtRXBDLFlBQUM7Q0FBQSxBQXBFRCxJQW9FQztrQkFwRW9CLEtBQUsifQ==
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXguanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi9zcmMvaW5kZXgudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7QUFBQSw4Q0FBNEU7QUFDNUUsNERBQXNDO0FBRXRDLDZDQUErRDtBQUMvRCx1Q0FBOEM7QUFDOUMsMkRBQXFDO0FBRXJDLGdCQUFNLENBQUMsVUFBVSxDQUFDLGtCQUFPLENBQUMsQ0FBQztBQU8zQjtJQUFBO0lBNkRBLENBQUM7SUEzRE8scUJBQUssR0FBWCxVQUFZLE1BQWU7Ozs7Ozs7d0JBQ3pCLGdCQUFNLENBQUMsSUFBSSxDQUFDLHlCQUF5QixDQUFDLENBQUM7d0JBQ2pDLFdBQVcsU0FBRyxNQUFNLENBQUMsT0FBTywwQ0FBRSxXQUFXLENBQUM7d0JBQ2hELGdCQUFNLENBQUMsS0FBSyxDQUFDLE1BQUksV0FBVyx3QkFBbUIsSUFBSSxDQUFDLFNBQVMsQ0FBQyxNQUFNLENBQUMsS0FBSyxDQUFHLENBQUMsQ0FBQzt3QkFFekUsSUFBSSxHQUFHOzRCQUNYLE1BQU0sRUFBRSxDQUFDLFlBQVksQ0FBQzs0QkFDdEIsT0FBTyxFQUFFLENBQUMsTUFBTSxFQUFFLFlBQVksQ0FBQzs0QkFDL0IsS0FBSyxFQUFFLEVBQUUsVUFBVSxFQUFFLEdBQUcsRUFBRSxZQUFZLEVBQUUsR0FBRyxFQUFFLElBQUksRUFBRSxHQUFHLEVBQUU7eUJBQ3pELENBQUM7d0JBQ0ksS0FDSixtQkFBWSxDQUFDLEVBQUUsSUFBSSxFQUFFLE1BQU0sQ0FBQyxJQUFJLEVBQUUsRUFBRSxJQUFJLENBQUMsQ0FBQyxJQUFJLElBQUksRUFBRSxFQUQzQyxTQUFTLE9BQUEsRUFBRSxrQkFBZSxFQUFmLFVBQVUsbUJBQUcsRUFBRSxLQUFBLEVBQUUsQ0FBQyxPQUFBLENBQ2U7d0JBRXZELElBQUksQ0FBQyxFQUFFOzRCQUNMLFdBQUksQ0FBQyxlQUFJLENBQUMsQ0FBQzs0QkFDWCxzQkFBTzt5QkFDUjt3QkFFRCxzQkFBZSxDQUFDLHVCQUFZLEVBQUU7NEJBQzVCLE9BQU8sRUFBRSxPQUFPOzRCQUNoQixHQUFHLFFBQUUsTUFBTSxDQUFDLFdBQVcsMENBQUUsU0FBUzs0QkFDbEMsTUFBTSxFQUFFLFVBQVU7eUJBQ25CLENBQUMsQ0FBQzt3QkFFRyxLQUE2RCxNQUFNLENBQUMsS0FBSyxFQUF2RSxNQUFNLFlBQUEsRUFBVyxZQUFZLGFBQUEsRUFBWSxhQUFhLGNBQUEsQ0FBa0I7d0JBQ3hFLE9BQU8sR0FBSyxhQUFhLFFBQWxCLENBQW1CO3dCQUVsQyxxQkFBYSxDQUFDLFNBQVMsRUFBRSxPQUFPLENBQUMsQ0FBQzt3QkFFNUIsTUFBTSxHQUFnQjs0QkFDMUIsTUFBTSxRQUFBOzRCQUNOLFlBQVksY0FBQTs0QkFDWixhQUFhLGVBQUE7NEJBQ2IsV0FBVyxFQUFFO2dDQUNYLFNBQVMsRUFBRSxFQUFFO2dDQUNiLFdBQVcsRUFBRSxFQUFFO2dDQUNmLGVBQWUsRUFBRSxFQUFFOzZCQUNwQjs0QkFDRCxXQUFXLEVBQUUsWUFBWSxDQUFDLElBQUk7NEJBQzlCLFlBQVksRUFBRSxhQUFhLENBQUMsSUFBSTt5QkFDakMsQ0FBQzt3QkFFSSxPQUFPLEdBQUcsSUFBSSxpQkFBTyxDQUFDLFdBQVcsRUFBRSxTQUFTLEVBQUUsVUFBVSxDQUFDLENBQUM7d0JBRTFELE1BQU0sR0FBWTs0QkFDdEIsS0FBSyxFQUFFLE1BQU0sQ0FBQyxLQUFLO3lCQUNwQixDQUFDO3dCQUVrQixxQkFBTSxPQUFPLENBQUMsS0FBSyxDQUFDLE1BQU0sQ0FBQyxFQUFBOzt3QkFBekMsV0FBVyxHQUFHLFNBQTJCO3dCQUMvQyxnQkFBTSxDQUFDLEtBQUssQ0FBQyxNQUFJLFdBQVcsd0JBQW1CLElBQUksQ0FBQyxTQUFTLENBQUMsV0FBVyxDQUFHLENBQUMsQ0FBQzt3QkFDOUUsSUFBSSxXQUFXLENBQUMsWUFBWSxFQUFFOzRCQUM1QixNQUFNLENBQUMsWUFBWSxHQUFHLFdBQVcsQ0FBQyxZQUFZLENBQUM7eUJBQ2hEOzZCQUFNOzRCQUNMLE1BQU0sQ0FBQyxLQUFLLEdBQUcsV0FBVyxDQUFDLEtBQUssQ0FBQzt5QkFDbEM7d0JBRUQsZ0JBQU0sQ0FBQyxJQUFJLENBQUMsOEJBQThCLENBQUMsQ0FBQzt3QkFDNUMsc0JBQU8sTUFBTSxFQUFDOzs7O0tBQ2Y7SUFDSCxZQUFDO0FBQUQsQ0FBQyxBQTdERCxJQTZEQyJ9

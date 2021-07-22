@@ -12,5 +12,5 @@ interface IBuildOpts {
     stages: string[];
     credentials: ICredentials;
 }
-export default function generateBuildContainerBuildOpts({ credentials, region, serviceName, serviceProps, functionName, functionProps, baseDir, codeUri, funcArtifactDir, verbose, stages, }: IBuildOpts): Promise<any>;
+export declare function generateBuildContainerBuildOpts({ credentials, region, serviceName, serviceProps, functionName, functionProps, baseDir, codeUri, funcArtifactDir, verbose, stages, }: IBuildOpts): Promise<any>;
 export {};
