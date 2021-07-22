@@ -2,27 +2,10 @@ import _ from 'lodash';
 import path from 'path';
 import nestedObjectAssign from 'nested-object-assign';
 import * as docker from './docker';
-import { addEnv } from './env';
 import { IServiceProps, IFunctionProps, ICredentials } from '../interface';
-
-const pkg = require('../../package.json');
-
-const { FC_DOCKER_VERSION } = process.env;
-
-const IMAGE_VERSION = FC_DOCKER_VERSION || pkg['fc-docker'].version || '1.9.2';
-const DEFAULT_REGISTRY = pkg['fc-docker'].registry_default || 'registry.hub.docker.com';
-const runtimeImageMap = {
-  nodejs6: 'nodejs6',
-  nodejs8: 'nodejs8',
-  nodejs10: 'nodejs10',
-  nodejs12: 'nodejs12',
-  'python2.7': 'python2.7',
-  python3: 'python3.6',
-  java8: 'java8',
-  'php7.2': 'php7.2',
-  'dotnetcore2.1': 'dotnetcore2.1',
-  custom: 'custom',
-};
+import { resolveRuntimeToDockerImage } from './get-image-name';
+import { processFunfile, getFunfile } from './install-file';
+import { addEnv } from './env';
 
 interface IBuildOpts {
   region: string;
@@ -38,7 +21,7 @@ interface IBuildOpts {
   credentials: ICredentials;
 }
 
-export default async function generateBuildContainerBuildOpts({
+export async function generateBuildContainerBuildOpts({
   credentials,
   region,
   serviceName,
@@ -93,7 +76,12 @@ export default async function generateBuildContainerBuildOpts({
 
   const cmd = ['fun-install', 'build', '--json-params', JSON.stringify(params)];
 
-  const opts = await generateContainerBuildOpts(runtime, containerName, mounts, cmd, envs);
+  let imageName: string;
+  const filePath = await getFunfile(codeUri);
+  if (filePath) {
+    imageName = await processFunfile(serviceName, codeUri, filePath, funcArtifactDir, runtime, functionName);
+  }
+  const opts = await generateContainerBuildOpts(runtime, containerName, mounts, cmd, envs, imageName);
 
   return opts;
 }
@@ -104,6 +92,7 @@ async function generateContainerBuildOpts(
   mounts: string[],
   cmd: string[],
   envs: string[],
+  imageName?: string,
 ) {
   const hostOpts = {
     HostConfig: {
@@ -121,12 +110,10 @@ async function generateContainerBuildOpts(
     AttachStderr: true,
   };
 
-  const imageName = await resolveRuntimeToDockerImage(runtime);
-
   const opts = nestedObjectAssign(
     {
       Env: resolveDockerEnv(envs),
-      Image: imageName,
+      Image: imageName || await resolveRuntimeToDockerImage(runtime),
       name: containerName,
       Cmd: cmd,
       User: resolveDockerUser(),
@@ -147,19 +134,6 @@ function resolveDockerUser(): string {
   }
 
   return `${userId}:${groupId}`;
-}
-
-async function resolveRuntimeToDockerImage(runtime: string): Promise<string> {
-  if (runtimeImageMap[runtime]) {
-    const name = runtimeImageMap[runtime];
-    const imageName = `${DEFAULT_REGISTRY}/aliyunfc/runtime-${name}:build-${IMAGE_VERSION}`;
-    return imageName;
-  }
-  const errorMessage = `resolveRuntimeToDockerImage: invalid runtime name ${runtime}. Supported list: ${Object.keys(
-    runtimeImageMap,
-  )}`;
-
-  throw new Error(errorMessage);
 }
 
 function resolveDockerEnv(envs = {}) {

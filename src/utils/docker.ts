@@ -1,6 +1,7 @@
 import { Logger } from '@serverless-devs/core';
 import _ from 'lodash';
 import fs from 'fs-extra';
+import tar from 'tar-fs';
 import path from 'path';
 import Docker from 'dockerode';
 import DraftLog from 'draftlog';
@@ -347,4 +348,58 @@ export async function pullImageIfNeed(imageName: string): Promise<void> {
   } else {
     Logger.info(CONTEXT, `skip pulling image ${imageName}...`);
   }
+}
+
+export function buildImage(dockerBuildDir: string, dockerfilePath: string, imageTag: string): Promise<string> {
+
+  return new Promise((resolve, reject) => {
+    const tarStream = tar.pack(dockerBuildDir);
+
+    docker.buildImage(tarStream, {
+      dockerfile: path.relative(dockerBuildDir, dockerfilePath),
+      t: imageTag,
+    }, (error, stream) => {
+      containers.add(stream);
+
+      if (error) {
+        reject(error);
+        return;
+      }
+      stream.on('error', (e) => {
+        containers.delete(stream);
+        reject(e);
+      });
+      stream.on('end', () => {
+        containers.delete(stream);
+        resolve(imageTag);
+      });
+
+      followProgress(stream, (err, res) => {
+        err ? reject(err) : resolve(res);
+      });
+    });
+  });
+}
+
+async function zipTo(archive, to) {
+
+  await fs.ensureDir(to);
+
+  await new Promise((resolve, reject) => {
+    archive.pipe(tar.extract(to)).on('error', reject).on('finish', resolve);
+  });
+}
+
+export async function copyFromImage(imageName, from, to) {
+  const container = await docker.createContainer({
+    Image: imageName,
+  });
+
+  const archive = await container.getArchive({
+    path: from,
+  });
+
+  await zipTo(archive, to);
+
+  await container.remove();
 }

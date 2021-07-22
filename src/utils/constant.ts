@@ -5,35 +5,53 @@ export const CONTEXT_NAME = 'fc-build';
 
 export const HELP = [
   {
+    header: 'Build',
+    content: 'Build the dependencies.',
+  },
+  {
+    header: 'Usage',
+    content: [
+      { example: '$ s exec -- build <option>' },
+    ],
+  },
+  {
     header: 'Options',
     optionList: [
       {
         name: 'dockerfile',
-        description: '指定 dockerfile 路径',
+        description: 'Specify the dockerfile path',
         alias: 'f',
         defaultOption: false,
         type: String,
       },
       {
         name: 'use-docker',
-        description: '使用 docker 构建',
+        description: 'Use docker container to build functions',
         alias: 'd',
         defaultOption: false,
         type: String,
       },
+    ],
+  },
+  {
+    header: 'Global Options',
+    optionList: [
       {
         name: 'help',
-        description: '使用引导',
+        description: 'Build help for command',
         alias: 'h',
         type: Boolean,
       },
     ],
   },
   {
-    header: 'Examples',
+    header: 'Examples with Yaml',
     content: [
       {
         example: '$ s exec -- build --use-docker',
+      },
+      {
+        example: '$ s exec -- build',
       },
     ],
   },
