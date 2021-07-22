@@ -1,4 +1,4 @@
-import { Logger } from '@serverless-devs/core';
+import { Logger, spinner } from '@serverless-devs/core';
 import _ from 'lodash';
 import fs from 'fs-extra';
 import tar from 'tar-fs';
@@ -7,7 +7,7 @@ import Docker from 'dockerode';
 import DraftLog from 'draftlog';
 import generatePwdFile from './passwd';
 import findPathsOutofSharedPaths from './docker-support';
-import { resolveLibPathsFromLdConf, checkCodeUri, getExcludeFilesEnv } from './utils';
+import { resolveLibPathsFromLdConf, checkCodeUri, getExcludeFilesEnv, isDebug } from './utils';
 import { generateDebugEnv, addEnv } from './env';
 import { CONTEXT } from './constant';
 import { IServiceProps, IFunctionProps, IObject, ICredentials } from '../interface';
@@ -295,12 +295,13 @@ export async function dockerRun(opts: any): Promise<any> {
   await pullImageIfNeed(opts.Image);
 
   const container = await createContainer(opts);
+  const vm = isDebug ? undefined : spinner('builder begin to build');
 
   const attachOpts = {
     hijack: true,
     stream: true,
     stdin: true,
-    stdout: true,
+    stdout: isDebug,
     stderr: true,
   };
 
@@ -330,6 +331,7 @@ export async function dockerRun(opts: any): Promise<any> {
   // exitRs format: {"Error":null,"StatusCode":0}
   // see https://docs.docker.com/engine/api/v1.37/#operation/ContainerWait
   const exitRs = await container.wait();
+  vm?.stop();
 
   Logger.debug(CONTEXT, `Container wait: ${JSON.stringify(exitRs)} `);
 

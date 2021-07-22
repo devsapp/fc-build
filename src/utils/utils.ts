@@ -8,6 +8,7 @@ import fs from 'fs-extra';
 import { ICodeUri, IBuildDir, IObject } from '../interface';
 
 const BUILDARTIFACTS = path.join('.s', 'build', 'artifacts');
+export const isDebug = process.env?.temp_params?.includes('--debug');
 
 export function sleep(ms: number) {
   return new Promise((resolve) => {
