@@ -34,6 +34,7 @@ async function getWorkDir(funfilePath: string) {
     logger.debug(e.toString());
     return '/code/.';
   }
+  return '/code/.';
 }
 
 export async function processFunfile(

@@ -78,18 +78,17 @@ export default class Builder {
       const image = await this.buildImage(buildInput);
       return { image };
     }
-
-    const codeSkipBuild = await this.codeSkipBuild({ baseDir, codeUri, runtime });
-    this.logger.debug(`[${this.projectName}] Code skip build: ${codeSkipBuild}.`);
-
     const src = checkCodeUri(codeUri);
+    const funfilePath = await getFunfile(src);
+    const codeSkipBuild = funfilePath || await this.codeSkipBuild({ baseDir, codeUri, runtime });
+    this.logger.debug(`[${this.projectName}] Code skip build: ${codeSkipBuild}.`);
 
     if (!codeSkipBuild) {
       return {};
     }
 
     let buildSaveUri: string;
-    if (useDocker || await getFunfile(src)) {
+    if (useDocker || funfilePath) {
       buildSaveUri = await this.buildInDocker(buildInput, src);
     } else {
       buildSaveUri = await this.buildArtifact(buildInput, src);
