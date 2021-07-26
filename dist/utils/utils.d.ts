@@ -1,4 +1,5 @@
 import { ICodeUri, IBuildDir, IObject } from '../interface';
+export declare const isDebug: boolean;
 export declare function sleep(ms: number): Promise<unknown>;
 export declare function getExcludeFilesEnv(): string;
 export declare function isCopyCodeBuildRuntime(runtime: string): boolean;
