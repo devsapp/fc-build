@@ -13,8 +13,9 @@ export default class Builder {
     logger: ILogger;
     private useDocker;
     private dockerfile;
-    projectName: string;
-    constructor(projectName: string, useDocker: boolean, dockerfile: string);
+    private projectName;
+    private configDirPath;
+    constructor(projectName: string, useDocker: boolean, dockerfile: string, configPath: string);
     buildImage(buildInput: IBuildInput): Promise<string>;
     build(buildInput: IBuildInput): Promise<IBuildOutput>;
     buildInDocker({ region, serviceName, serviceProps, functionName, functionProps, verbose, credentials, }: IBuildInput, src: string): Promise<string>;
