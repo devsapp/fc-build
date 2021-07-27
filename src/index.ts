@@ -56,7 +56,7 @@ export default class Build {
       functionName: functionProps.name,
     };
 
-    const builder = new Builder(projectName, useDocker, dockerfile);
+    const builder = new Builder(projectName, useDocker, dockerfile, inputs?.path?.configPath);
 
     const output: IOutput = {
       props: inputs.props,
