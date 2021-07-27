@@ -27,12 +27,14 @@ export default class Builder {
 
   private useDocker: boolean;
   private dockerfile: string;
-  projectName: string;
+  private projectName: string;
+  private configDirPath: any;
 
-  constructor(projectName: string, useDocker: boolean, dockerfile: string) {
+  constructor(projectName: string, useDocker: boolean, dockerfile: string, configPath: string) {
     this.projectName = projectName;
     this.useDocker = useDocker;
     this.dockerfile = dockerfile;
+    this.configDirPath = configPath ? path.dirname(configPath) : process.cwd();
   }
 
   async buildImage(buildInput: IBuildInput): Promise<string> {
@@ -70,7 +72,7 @@ export default class Builder {
     }
     const { functionProps } = buildInput;
     const { codeUri, runtime } = functionProps;
-    const baseDir = process.cwd();
+    const baseDir = this.configDirPath;
 
     this.logger.debug(`[${this.projectName}] Runtime is ${runtime}.`);
 
@@ -78,6 +80,7 @@ export default class Builder {
       const image = await this.buildImage(buildInput);
       return { image };
     }
+
     const src = checkCodeUri(codeUri);
     const funfilePath = await getFunfile(src);
     const codeSkipBuild = funfilePath || await this.codeSkipBuild({ baseDir, codeUri, runtime });
@@ -108,7 +111,7 @@ export default class Builder {
   }: IBuildInput, src: string): Promise<string> {
     const stages = ['install', 'build'];
 
-    const baseDir = process.cwd();
+    const baseDir = this.configDirPath;
     const codeUri = path.join(baseDir, src);
     const funcArtifactDir = this.initBuildArtifactDir({ baseDir, serviceName, functionName });
 
@@ -149,7 +152,7 @@ export default class Builder {
     process.env.BUILD_EXCLIUDE_FILES = getExcludeFilesEnv();
     process.env.TOOL_CACHE_PATH = '.s';
 
-    const baseDir = process.cwd();
+    const baseDir = this.configDirPath;
     const { runtime } = functionProps;
 
     const stages = ['install', 'build'];
