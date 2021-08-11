@@ -8,12 +8,52 @@ import { buildImage, copyFromImage } from './docker';
 
 const uuid = require('uuid');
 
-export async function getFunfile(codeUri: string) {
+async function fileExists(filePath: string) {
+  if (await fs.pathExists(filePath)) {
+    return (await fs.stat(filePath)).isFile();
+  }
+  return false;
+}
+
+export async function getFunfile({
+  codeUri, runtime, baseDir,
+}: { codeUri: string; runtime: string; baseDir: string }): Promise<string | undefined> {
   const funfilePath = path.join(codeUri, 'Funfile');
-  if (await fs.pathExists(funfilePath)) {
+  const funfileExists = await fileExists(funfilePath);
+  logger.debug(`Funfile path: ${funfilePath}; has Funfile: ${funfileExists}`);
+
+  const aptListFilePath = path.join(codeUri, 'apt-get.list');
+  const aptListExists = await fileExists(aptListFilePath);
+  logger.debug(`apt-get.list path: ${aptListFilePath}; has apt-get.list: ${aptListExists}`);
+
+  if (aptListExists) {
+    let fileStr = await converAptFileToFunfile(aptListFilePath, 'apt-get');
+    if (fileStr) {
+      if (funfileExists) {
+        const funStr = await fs.readFile(funfilePath, 'utf8');
+        fileStr = `${funStr}${fileStr}`;
+      } else {
+        fileStr = `RUNTIME ${runtime}\nWORKDIR /code${fileStr}`;
+      }
+      const cacheFilePath = path.join(baseDir, '.s', 'cacheFunfile');
+      await fs.outputFile(cacheFilePath, fileStr);
+      return cacheFilePath;
+    }
+  }
+
+  if (funfileExists) {
     return funfilePath;
   }
-  return null;
+}
+
+async function converAptFileToFunfile(filePath: string, command: string) {
+  let fileStr = '';
+  for (const line of await readLines(filePath)) {
+    if (!line.startsWith('#')) {
+      fileStr += `\nRUN fun-install ${command} install ${line}`;
+    }
+  }
+  return fileStr;
 }
 
 async function convertFunfileToDockerfile(funfilePath, dockerfilePath, runtime, serviceName, functionName) {

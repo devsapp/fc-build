@@ -67,7 +67,7 @@ export function getArtifactPath({ baseDir, serviceName, functionName }: IBuildDi
   return path.join(rootArtifact, serviceName, functionName);
 }
 
-export function readLines(fileName: string): Promise<any[]> {
+export function readLines(fileName: string): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const lines = [];
 
