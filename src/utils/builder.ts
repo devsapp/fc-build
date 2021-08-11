@@ -82,7 +82,7 @@ export default class Builder {
     }
 
     const src = checkCodeUri(codeUri);
-    const funfilePath = await getFunfile(src);
+    const funfilePath = await getFunfile({ codeUri: src, runtime, baseDir });
     const codeSkipBuild = funfilePath || await this.codeSkipBuild({ baseDir, codeUri, runtime });
     this.logger.debug(`[${this.projectName}] Code skip build: ${codeSkipBuild}.`);
 

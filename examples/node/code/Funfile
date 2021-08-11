@@ -1,0 +1,4 @@
+RUNTIME nodejs12
+WORKDIR /code 
+RUN fun-install npm install js-yaml 
+#RUN fun-install apt-get install ghostscript 
