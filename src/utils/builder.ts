@@ -45,7 +45,7 @@ export default class Builder {
       throw new Error(errorMessage);
     }
 
-    const dockerFileName = this.dockerfile || 'Dockerfile';
+    const dockerFileName = path.resolve(this.dockerfile) || path.resolve('Dockerfile');
     if (!fs.existsSync(dockerFileName)) {
       const errorMessage = 'Cannot find the Dockerfile file, please make sure the Dockerfile file exists in the current working directory, or specify the Dockerfile file path through --dockerfile <path>';
       throw new Error(errorMessage);
@@ -60,6 +60,7 @@ export default class Builder {
     this.logger.info('Building image...');
     execSync(`docker build -t ${imageName} -f ${dockerFileName} .`, {
       stdio: 'inherit',
+      cwd: path.dirname(dockerFileName),
     });
     this.logger.log(`Build image(${imageName}) successfully`);
     return imageName;

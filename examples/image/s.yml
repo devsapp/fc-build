@@ -4,7 +4,7 @@ access: aliyun-release  #  秘钥别名
 
 services:
   image-test: #  服务名称
-    component: fc-build  # 组件名称
+    component: ${path(../..)}  # 组件名称
     props: #  组件的属性值
       region: cn-shenzhen
       service:
@@ -12,7 +12,7 @@ services:
       function:
         name: build-test-function
         runtime: custom-container
-        customContainer:
+        customContainerConfig:
           image: 'registry.cn-hongkong.aliyuncs.com/s-devs-generate/fc-com-test-build-image:v0.1'  # 仓库地址
           command: '["node"]'
           args: '["index.js"]'
