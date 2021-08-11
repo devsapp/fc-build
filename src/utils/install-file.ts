@@ -97,16 +97,10 @@ export async function processFunfile(
   logger.log(`copying function artifact to ${funcArtifactDir}`);
   await copyFromImage(imageTag, await getWorkDir(funfilePath), funcArtifactDir);
 
-  // TODO: process nas folder
-
-  // const nasConfig = (serviceRes.Properties || {}).NasConfig;
-  // let nasMappings;
-  // if (nasConfig) {
-  //   nasMappings = await nas.convertNasConfigToNasMappings(nas.getDefaultNasDir(baseDir), nasConfig, serviceName);
-  // }
-  // await copyNasArtifact(nasMappings, imageTag, baseDir, funcArtifactDir);
   await fs.remove(dockerfilePath);
-  await fs.rename(path.join(funcArtifactDir, '.fun'), path.join(funcArtifactDir, '.s'));
+  if (fs.pathExists(path.join(funcArtifactDir, '.fun'))) {
+    await fs.rename(path.join(funcArtifactDir, '.fun'), path.join(funcArtifactDir, '.s'));
+  }
 
   return imageTag;
 }
