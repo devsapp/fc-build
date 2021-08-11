@@ -1,4 +1,13 @@
-const pkg = require('../../package.json');
+import * as path from 'path';
+
+const baseName: string = path.basename(__dirname);
+let pkg;
+if (baseName === 'dist') {
+  // ncc compiler
+  pkg = require(path.join(path.resolve(__dirname, '..'), 'package.json'));
+} else {
+  pkg = require(path.join(path.resolve(__dirname, '..', '..'), 'package.json'));
+}
 
 const { FC_DOCKER_VERSION } = process.env;
 const IMAGE_VERSION = FC_DOCKER_VERSION || pkg['fc-docker'].version || '1.9.2';

@@ -41,7 +41,7 @@ If you have a requirement, you can submit the issue at https://github.com/devsap
       }
 
       const imageName = await resolveRuntimeToDockerImage(runtimeOfFunfile);
-      dockerfile.push('FROM ' + imageName + ` as ${runtimeOfFunfile}`);
+      dockerfile.push(`FROM ${ imageName } as ${runtimeOfFunfile}`);
     } else {
       const range = instruction.getRange();
       // @ts-ignore: .

@@ -13,7 +13,6 @@ interface IOutput {
 }
 
 export default class Build {
-
   async build(inputs: IInputs) {
     Logger.info('Build artifact start...');
     const projectName = inputs.project?.projectName;
