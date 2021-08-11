@@ -12,7 +12,14 @@ import { generateDebugEnv, addEnv } from './env';
 import { CONTEXT } from './constant';
 import { IServiceProps, IFunctionProps, IObject, ICredentials } from '../interface';
 
-const pkg = require('../../package.json');
+const baseName: string = path.basename(__dirname);
+let pkg;
+if (baseName === 'dist') {
+  // ncc compiler
+  pkg = require(path.join(path.resolve(__dirname, '..'), 'package.json'));
+} else {
+  pkg = require(path.join(path.resolve(__dirname, '..', '..'), 'package.json'));
+}
 
 DraftLog.into(console);
 
@@ -353,7 +360,6 @@ export async function pullImageIfNeed(imageName: string): Promise<void> {
 }
 
 export function buildImage(dockerBuildDir: string, dockerfilePath: string, imageTag: string): Promise<string> {
-
   return new Promise((resolve, reject) => {
     const tarStream = tar.pack(dockerBuildDir);
 
@@ -384,7 +390,6 @@ export function buildImage(dockerBuildDir: string, dockerfilePath: string, image
 }
 
 async function zipTo(archive, to) {
-
   await fs.ensureDir(to);
 
   await new Promise((resolve, reject) => {
