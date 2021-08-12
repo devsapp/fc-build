@@ -45,7 +45,7 @@ export default class Builder {
       throw new Error(errorMessage);
     }
 
-    const dockerFileName = path.resolve(this.dockerfile) || path.resolve('Dockerfile');
+    const dockerFileName = path.resolve(this.dockerfile || 'Dockerfile');
     if (!fs.existsSync(dockerFileName)) {
       const errorMessage = 'Cannot find the Dockerfile file, please make sure the Dockerfile file exists in the current working directory, or specify the Dockerfile file path through --dockerfile <path>';
       throw new Error(errorMessage);
