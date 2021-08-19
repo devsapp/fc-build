@@ -1,6 +1,7 @@
 import { HLogger, ILogger } from '@serverless-devs/core';
 import fs from 'fs-extra';
 import path from 'path';
+import rimraf from 'rimraf';
 import _ from 'lodash';
 import fcBuilders from '@alicloud/fc-builders';
 import { execSync } from 'child_process';
@@ -114,7 +115,7 @@ export default class Builder {
 
     const baseDir = this.configDirPath;
     const codeUri = path.join(baseDir, src);
-    const funcArtifactDir = this.initBuildArtifactDir({ baseDir, serviceName, functionName });
+    const funcArtifactDir = await this.initBuildArtifactDir({ baseDir, serviceName, functionName });
 
     const opts = await generateBuildContainerBuildOpts({
       region,
@@ -159,7 +160,7 @@ export default class Builder {
     const stages = ['install', 'build'];
     const codePath = path.join(baseDir, src);
 
-    const artifactPath = this.initBuildArtifactDir({ baseDir, serviceName, functionName });
+    const artifactPath = await this.initBuildArtifactDir({ baseDir, serviceName, functionName });
 
     // detect fcfile
     const fcfilePath = path.resolve(codePath, 'fcfile');
@@ -214,14 +215,23 @@ export default class Builder {
     return taskFlows[0].name === 'DefaultTaskFlow';
   }
 
-  initBuildArtifactDir({ baseDir, serviceName, functionName }: IBuildDir): string {
+  async initBuildArtifactDir({ baseDir, serviceName, functionName }: IBuildDir): Promise<string> {
     const artifactPath = getArtifactPath({ baseDir, serviceName, functionName });
 
     this.logger.debug(`[${this.projectName}] Build save url: ${artifactPath}.`);
 
     if (fs.pathExistsSync(artifactPath)) {
       this.logger.debug(`[${this.projectName}] Folder already exists, delete folder.`);
-      fs.rmdirSync(artifactPath, { recursive: true });
+      await new Promise((resolve, reject) => {
+        rimraf(artifactPath, (err) => {
+          if (err) {
+            this.logger.error(`Delete dir error: ${artifactPath}`);
+            reject(err);
+          }
+          resolve('');
+        });
+      });
+      // fs.rmdirSync(artifactPath, { recursive: true });
       this.logger.debug(`[${this.projectName}] Deleted folder successfully.`);
     }
     this.logger.debug(`[${this.projectName}] Create build folder.`);
