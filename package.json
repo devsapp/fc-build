@@ -33,20 +33,19 @@
     "@types/lodash": "^4.14.168",
     "@types/node": "14",
     "@types/uuid": "^8.3.1",
+    "@vercel/ncc": "^0.24.0",
     "f2elint": "^0.4.4",
     "jest": "^26.4.0",
     "rimraf": "^3.0.2",
     "ts-jest": "^26.2.0",
     "ts-loader": "^8.0.14",
-    "typescript": "^3.9.7",
-    "@vercel/ncc": "^0.24.0"
+    "typescript": "^3.9.7"
   },
   "scripts": {
     "start": "npm run dev",
     "dev": "npx tsc -w -p tsconfig.json",
     "prebuild": "rm -rf node_modules && rm -rf package-lock.json && npm i && rimraf dist",
     "build": "npm run fix && npm run lint && ncc build src/index.ts -m -e @serverless-devs/core -o dist",
-    "postbuild": "rm -rf package-lock.json && rm -rf node_modules",
     "test": "jest",
     "test:cov": "jest --coverage",
     "lint": "f2elint scan",
