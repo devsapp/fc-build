@@ -2,7 +2,6 @@ import { reportComponent, commandParse, help } from '@serverless-devs/core';
 import Builder from './utils/builder';
 import { IInputs, IBuildInput } from './interface';
 import { CONTEXT, HELP, CONTEXT_NAME } from './utils/constant';
-import { checkCommands } from './utils/utils';
 import Logger from './common/logger';
 
 Logger.setContent(CONTEXT);
@@ -40,7 +39,9 @@ export default class Build {
     const { region, service: serviceProps, function: functionProps } = inputs.props;
     const { runtime } = functionProps;
 
-    checkCommands(useDocker, runtime);
+    if (!runtime) {
+      throw new Error('Parameter function.runtime is required');
+    }
 
     const params: IBuildInput = {
       region,

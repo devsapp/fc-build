@@ -32,17 +32,6 @@ export function isCopyCodeBuildRuntime(runtime: string): boolean {
   return false;
 }
 
-export function checkCommands(useDocker: boolean, runtime: string) {
-  if (!runtime) {
-    throw new Error('runtime required.');
-  }
-
-  if (!useDocker && runtime === 'custom-container') {
-    const errorMessage = `'${runtime}' needs to pass the 's build --use-docker' command.`;
-    throw new Error(errorMessage);
-  }
-}
-
 export function checkCodeUri(codeUri: string | ICodeUri): string {
   if (!codeUri) {
     return '';

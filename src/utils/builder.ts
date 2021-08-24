@@ -69,16 +69,17 @@ export default class Builder {
 
   async build(buildInput: IBuildInput): Promise<IBuildOutput> {
     const { useDocker } = this;
-    if (useDocker) {
-      this.logger.info('Use docker for building.');
-    }
     const { functionProps } = buildInput;
     const { codeUri, runtime } = functionProps;
     const baseDir = this.configDirPath;
+    const isContainer = runtime === 'custom-container';
+    if (useDocker || isContainer) {
+      this.logger.info('Use docker for building.');
+    }
 
     this.logger.debug(`[${this.projectName}] Runtime is ${runtime}.`);
 
-    if (useDocker && runtime === 'custom-container') {
+    if (isContainer) {
       const image = await this.buildImage(buildInput);
       return { image };
     }
