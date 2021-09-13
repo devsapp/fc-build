@@ -1,17 +1,8 @@
-import * as path from 'path';
+import {DEFAULT_REGISTRY, IMAGE_VERSION} from "./parser";
+import {resolveDockerRegistry} from "./build-opts";
 
-const baseName: string = path.basename(__dirname);
-let pkg;
-if (baseName === 'dist') {
-  // ncc compiler
-  pkg = require(path.join(path.resolve(__dirname, '..'), 'package.json'));
-} else {
-  pkg = require(path.join(path.resolve(__dirname, '..', '..'), 'package.json'));
-}
 
-const { FC_DOCKER_VERSION } = process.env;
-const IMAGE_VERSION = FC_DOCKER_VERSION || pkg['fc-docker'].version || '1.9.2';
-const DEFAULT_REGISTRY = pkg['fc-docker'].registry_default || 'registry.hub.docker.com';
+
 const runtimeImageMap = {
   nodejs6: 'nodejs6',
   nodejs8: 'nodejs8',
@@ -29,7 +20,8 @@ const runtimeImageMap = {
 export async function resolveRuntimeToDockerImage(runtime: string): Promise<string> {
   if (runtimeImageMap[runtime]) {
     const name = runtimeImageMap[runtime];
-    const imageName = `${DEFAULT_REGISTRY}/aliyunfc/runtime-${name}:build-${IMAGE_VERSION}`;
+    const dockerImageRegistry = (await resolveDockerRegistry()) || DEFAULT_REGISTRY;
+    const imageName = `${dockerImageRegistry}/aliyunfc/runtime-${name}:build-${IMAGE_VERSION}`;
     return imageName;
   }
   const errorMessage = `resolveRuntimeToDockerImage: invalid runtime name ${runtime}. Supported list: ${Object.keys(

@@ -5,6 +5,9 @@ import logger from '../common/logger';
 import * as parser from './parser';
 import { readLines } from './utils';
 import { buildImage, copyFromImage } from './docker';
+import { IServiceProps } from "../interface";
+import {formatDockerfileForBuildkit} from "./buildkit";
+import {execSync} from "child_process";
 
 const uuid = require('uuid');
 
@@ -76,6 +79,33 @@ async function getWorkDir(funfilePath: string) {
   }
   return '/code/.';
 }
+
+export async function processFunfileForBuildkit(serviceConfig: IServiceProps, codeUri: string, funfilePath: string, baseDir: string, funcArtifactDir: string, runtime: string, functionName: string) {
+  logger.info('Funfile exist and useBuildkit is specified, fc will use buildkit to build');
+  const dockerfilePath = path.join(codeUri, '.Funfile.buildkit.generated.dockerfile');
+
+  await convertFunfileToDockerfile(funfilePath, dockerfilePath, runtime, serviceConfig.name, functionName);
+
+  const fromSrcToDstPairs = [{
+    'src': '/code',
+    'dst': funcArtifactDir
+  }];
+
+  // 生成 dockerfile
+  const targetBuildStage = 'buildresult';
+  await formatDockerfileForBuildkit(dockerfilePath, fromSrcToDstPairs, baseDir, targetBuildStage);
+
+  execSync(
+    `buildctl build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(dockerfilePath)} --opt target=${targetBuildStage} --opt filename=${path.basename(dockerfilePath)} --output type=local,dest=${baseDir}`, {
+      stdio: 'inherit'
+    });
+
+  await fs.remove(dockerfilePath);
+  if (await fs.pathExists(path.join(funcArtifactDir, '.fun'))) {
+    await fs.rename(path.join(funcArtifactDir, '.fun'), path.join(funcArtifactDir, '.s'));
+  }
+}
+
 
 export async function processFunfile(
   serviceName: string,

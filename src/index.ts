@@ -19,11 +19,14 @@ export default class Build {
 
     const apts = {
       string: ['dockerfile'],
-      boolean: ['help', 'use-docker'],
+      boolean: ['help', 'use-docker', 'use-buildkit'],
       alias: { dockerfile: 'f', 'use-docker': 'd', help: 'h' },
     };
-    const { d: useDocker, dockerfile = '', h }: any =
-      commandParse({ args: inputs.args }, apts).data || {};
+    const argsData: any = commandParse(inputs, apts).data || {};
+    const { dockerfile = '', h }: any = argsData;
+    const useBuildkit: boolean = argsData['use-buildkit'];
+    const useDocker: boolean = argsData['use-docker'];
+
 
     if (h) {
       help(HELP);
@@ -56,7 +59,7 @@ export default class Build {
       functionName: functionProps.name,
     };
 
-    const builder = new Builder(projectName, useDocker, dockerfile, inputs?.path?.configPath);
+    const builder = new Builder(projectName, useDocker, dockerfile, inputs?.path?.configPath, useBuildkit);
 
     const output: IOutput = {
       props: inputs.props,
