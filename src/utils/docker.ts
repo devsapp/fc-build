@@ -9,9 +9,8 @@ import generatePwdFile from './passwd';
 import findPathsOutofSharedPaths from './docker-support';
 import { resolveLibPathsFromLdConf, checkCodeUri, getExcludeFilesEnv, isDebug } from './utils';
 import { generateDebugEnv, addEnv } from './env';
-import { CONTEXT } from './constant';
+import { CONTEXT, DEFAULT_REGISTRY } from './constant';
 import { IServiceProps, IFunctionProps, IObject, ICredentials } from '../interface';
-import {DEFAULT_REGISTRY} from "./parser";
 
 DraftLog.into(console);
 

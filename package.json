@@ -3,7 +3,7 @@
   "version": "0.0.15",
   "main": "./dist/index.js",
   "fc-docker": {
-    "version": "1.9.19",
+    "version": "1.9.21",
     "registry_default": "registry.cn-beijing.aliyuncs.com",
     "registry_mirrors": [
       "registry.cn-beijing.aliyuncs.com",

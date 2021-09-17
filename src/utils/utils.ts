@@ -114,7 +114,3 @@ export async function resolveLibPathsFromLdConf(
   }
   return envs;
 }
-
-export function isNccPath(targetPath: string): boolean {
-  return path.basename(targetPath) === 'dist';
-}

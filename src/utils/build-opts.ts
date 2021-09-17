@@ -6,10 +6,6 @@ import { IServiceProps, IFunctionProps, ICredentials } from '../interface';
 import { resolveRuntimeToDockerImage } from './get-image-name';
 import { processFunfile, getFunfile } from './install-file';
 import { addEnv } from './env';
-import {DEFAULT_REGISTRY, DOCKER_REGISTRIES} from "./parser";
-import * as httpx from 'httpx';
-
-let DOCKER_REGISTRY_CACHE;
 
 interface IBuildOpts {
   region: string;
@@ -143,27 +139,3 @@ function resolveDockerUser(): string {
 function resolveDockerEnv(envs = {}) {
   return _.map(addEnv(envs || {}), (v, k) => `${k}=${v}`);
 }
-
-// export async function resolveImageNameForPull(imageName) {
-//
-//   const dockerImageRegistry = await resolveDockerRegistry();
-//
-//   if (dockerImageRegistry) {
-//     imageName = `${dockerImageRegistry}/${imageName}`;
-//   }
-//   return imageName;
-// }
-
-export async function resolveDockerRegistry() {
-  if (DOCKER_REGISTRY_CACHE) {
-    return DOCKER_REGISTRY_CACHE;
-  }
-  const promises = DOCKER_REGISTRIES.map(r => httpx.request(`https://${r}/v2/aliyunfc/runtime-nodejs8/tags/list`, { timeout: 3000 }).then(() => r));
-  try {
-    DOCKER_REGISTRY_CACHE = await Promise.race(promises);
-  } catch (error) {
-    DOCKER_REGISTRY_CACHE = DEFAULT_REGISTRY;
-  }
-  return DOCKER_REGISTRY_CACHE;
-}
-

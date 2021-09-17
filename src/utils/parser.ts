@@ -5,21 +5,6 @@ import fs from 'fs-extra';
 import { DockerfileParser } from 'dockerfile-ast';
 import logger from '../common/logger';
 import { resolveRuntimeToDockerImage } from './get-image-name';
-import path from "path";
-import {isNccPath} from "./utils";
-
-let pkg;
-if (isNccPath(__dirname)) {
-  // ncc compiler
-  pkg = require(path.join(path.resolve(__dirname, '..'), 'package.json'));
-} else {
-  pkg = require(path.join(path.resolve(__dirname, '..', '..'), 'package.json'));
-}
-
-const { FC_DOCKER_VERSION } = process.env;
-export const DEFAULT_REGISTRY = pkg['fc-docker'].registry_default || 'registry.hub.docker.com';
-export const DOCKER_REGISTRIES = pkg['fc-docker'].registry_mirrors || ['registry.hub.docker.com'];
-export const IMAGE_VERSION = FC_DOCKER_VERSION || pkg['fc-docker'].version || '1.9.2';
 
 
 const RESERVED_DOCKER_CMD = [

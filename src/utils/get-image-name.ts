@@ -1,6 +1,5 @@
-import {DEFAULT_REGISTRY, IMAGE_VERSION} from "./parser";
-import {resolveDockerRegistry} from "./build-opts";
-
+import { DEFAULT_REGISTRY, IMAGE_VERSION } from './constant';
+import { resolveDockerRegistry } from './docker-opts';
 
 
 const runtimeImageMap = {
