@@ -22,9 +22,10 @@ interface IMount {
     ReadOnly: boolean;
 }
 export declare function resolveCodeUriToMount(absCodeUri: string, readOnly?: boolean): Promise<IMount>;
-export declare function resolvePasswdMount(): Promise<any>;
+export declare function resolvePasswdMount(contentDir?: string): Promise<any>;
 export declare function dockerRun(opts: any): Promise<any>;
 export declare function pullImageIfNeed(imageName: string): Promise<void>;
 export declare function buildImage(dockerBuildDir: string, dockerfilePath: string, imageTag: string): Promise<string>;
+export declare function generateDockerfileEnvs(credentials: ICredentials, region: string, baseDir: string, serviceProps: IServiceProps, functionProps: IFunctionProps): Promise<any[]>;
 export declare function copyFromImage(imageName: any, from: any, to: any): Promise<void>;
 export {};

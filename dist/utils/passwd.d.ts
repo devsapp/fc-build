@@ -1,1 +1,1 @@
-export default function generatePwdFile(uid?: number, gid?: number): Promise<string>;
+export default function generatePwdFile(targetDir?: string, uid?: number, gid?: number): Promise<string>;
