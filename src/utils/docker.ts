@@ -9,24 +9,14 @@ import generatePwdFile from './passwd';
 import findPathsOutofSharedPaths from './docker-support';
 import { resolveLibPathsFromLdConf, checkCodeUri, getExcludeFilesEnv, isDebug } from './utils';
 import { generateDebugEnv, addEnv } from './env';
-import { CONTEXT } from './constant';
+import { CONTEXT, DEFAULT_REGISTRY } from './constant';
 import { IServiceProps, IFunctionProps, IObject, ICredentials } from '../interface';
-
-const baseName: string = path.basename(__dirname);
-let pkg;
-if (baseName === 'dist') {
-  // ncc compiler
-  pkg = require(path.join(path.resolve(__dirname, '..'), 'package.json'));
-} else {
-  pkg = require(path.join(path.resolve(__dirname, '..', '..'), 'package.json'));
-}
 
 DraftLog.into(console);
 
 const docker = new Docker();
 const containers = new Set();
 const isWin = process.platform === 'win32';
-const DEFAULT_REGISTRY = pkg['fc-docker'].registry_default || 'registry.hub.docker.com';
 
 interface IDockerEnvs {
   baseDir: string;
@@ -285,11 +275,11 @@ export async function resolveCodeUriToMount(
   };
 }
 
-export async function resolvePasswdMount(): Promise<any> {
+export async function resolvePasswdMount(contentDir?: string): Promise<any> {
   if (process.platform === 'linux') {
     return {
       Type: 'bind',
-      Source: await generatePwdFile(),
+      Source: await generatePwdFile(contentDir),
       Target: '/etc/passwd',
       ReadOnly: true,
     };
@@ -396,6 +386,31 @@ async function zipTo(archive, to) {
     archive.pipe(tar.extract(to)).on('error', reject).on('finish', resolve);
   });
 }
+
+export async function generateDockerfileEnvs(credentials: ICredentials, region: string, baseDir: string, serviceProps: IServiceProps, functionProps: IFunctionProps) {
+  const serviceName: string = serviceProps.name;
+  const functionName: string = functionProps.name;
+  const DockerEnvs = await generateDockerEnvs({
+    region,
+    baseDir,
+    credentials,
+    serviceName,
+    serviceProps,
+    functionName,
+    functionProps,
+    debugPort: null,
+    httpParams: null,
+    ishttpTrigger: null,
+    debugIde: null,
+    debugArgs: null,
+  });
+  const DockerfilEnvs = [];
+  Object.keys(DockerEnvs).forEach((key) => {
+    DockerfilEnvs.push(`${key}=${DockerEnvs[key]}`);
+  });
+  return DockerfilEnvs;
+}
+
 
 export async function copyFromImage(imageName, from, to) {
   const container = await docker.createContainer({

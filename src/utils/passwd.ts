@@ -27,7 +27,7 @@ systemd-bus-proxy:x:103:106:systemd Bus Proxy,,,:/run/systemd:/bin/false
 messagebus:x:104:108::/var/run/dbus:/bin/false
 `;
 
-export default async function generatePwdFile(uid?: number, gid?: number): Promise<string> {
+export default async function generatePwdFile(targetDir?: string, uid?: number, gid?: number): Promise<string> {
   if (!uid) {
     uid = process.getuid();
   }
@@ -35,7 +35,10 @@ export default async function generatePwdFile(uid?: number, gid?: number): Promi
     gid = process.getgid();
   }
 
-  const filePath = path.join('/', 'tmp', `fun_${uid}_${gid}_passwd`);
+  let filePath = path.join('/', 'tmp', `fun_${uid}_${gid}_passwd`);
+  if (targetDir) {
+    filePath = path.join(targetDir, `.fun_${uid}_${gid}_passwd`);
+  }
 
   if (!(await fs.pathExists(filePath))) {
     const content = `${passwdContent }funcrafter:x:${uid}:${gid}::/tmp:/usr/sbin/nologin`;

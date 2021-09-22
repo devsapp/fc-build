@@ -7,10 +7,11 @@ import fcBuilders from '@alicloud/fc-builders';
 import { execSync } from 'child_process';
 import { checkCodeUri, getArtifactPath, getExcludeFilesEnv } from './utils';
 import { generateBuildContainerBuildOpts } from './build-opts';
-import { dockerRun } from './docker';
+import { dockerRun, resolvePasswdMount } from './docker';
 import { CONTEXT } from './constant';
 import { IBuildInput, ICodeUri, IBuildDir } from '../interface';
-import { getFunfile } from './install-file';
+import { getFunfile, processFunfileForBuildkit } from './install-file';
+import { generateDockerfileForBuildkit } from './buildkit';
 
 interface INeedBuild {
   baseDir: string;
@@ -26,21 +27,57 @@ interface IBuildOutput {
 export default class Builder {
   @HLogger(CONTEXT) logger: ILogger;
 
-  private useDocker: boolean;
+  private readonly useDocker: boolean;
   private dockerfile: string;
   private projectName: string;
   private configDirPath: any;
+  private readonly useBuildkit: boolean;
+  private readonly enableBuildkitServer: boolean;
+  private readonly buildkitServerPort: number;
+  static stages: string[] = ['install', 'build'];
+  static defaultbuildkitServerPort = 65360;
 
-  constructor(projectName: string, useDocker: boolean, dockerfile: string, configPath: string) {
+  constructor(projectName: string, useDocker: boolean, dockerfile: string, configPath: string, useBuildkit: boolean) {
     this.projectName = projectName;
-    this.useDocker = useDocker;
     this.dockerfile = dockerfile;
     this.configDirPath = configPath ? path.dirname(configPath) : process.cwd();
+
+    // set useDocker and useBuildkit
+    const escapeDockerArgsInBuildFC = +process.env.escapeDockerArgsInBuildFC;
+    const setBuildkitArgsDefaultInBuildFC = +process.env.setBuildkitArgsDefaultInBuildFC;
+    const enableBuildkitServer = +process.env.enableBuildkitServer;
+    const buildkitServerPort = +process.env.buildkitServerPort;
+    if (setBuildkitArgsDefaultInBuildFC) {
+      this.logger.debug('set useBuildkit arg default when building function');
+      this.useDocker = false;
+      this.useBuildkit = true;
+    } else if (useDocker && escapeDockerArgsInBuildFC) {
+      this.logger.debug('escape useDocker arg when building function');
+      this.useDocker = false;
+      this.useBuildkit = true;
+    } else if (useBuildkit) {
+      if (useDocker) {
+        this.logger.warn('--use-buildkit and --use-docker both exist, fc will use buildkit to build.');
+      }
+      this.useDocker = false;
+      this.useBuildkit = true;
+    } else if (useDocker) {
+      this.useDocker = true;
+      this.useBuildkit = false;
+    }
+
+    this.enableBuildkitServer = enableBuildkitServer === 1;
+    if (this.enableBuildkitServer) {
+      if (!this.useBuildkit) {
+        this.logger.warn('useBuildkit flag is set false, enableBuildkitServer environment is not working.');
+        this.enableBuildkitServer = false;
+      } else {
+        this.buildkitServerPort = buildkitServerPort || Builder.defaultbuildkitServerPort;
+      }
+    }
   }
 
-  async buildImage(buildInput: IBuildInput): Promise<string> {
-    const { customContainerConfig } = buildInput.functionProps;
-
+  private checkCustomContainerConfig(customContainerConfig: any): {dockerFileName: string; imageName: string} {
     if (!customContainerConfig) {
       const errorMessage = "No 'CustomContainer' configuration found in Function.";
       throw new Error(errorMessage);
@@ -57,6 +94,39 @@ export default class Builder {
       const errorMessage = 'Function/CustomContainer/Image required.';
       throw new Error(errorMessage);
     }
+    return {
+      dockerFileName,
+      imageName,
+    };
+  }
+
+  private async buildImageWithBuildkit(buildInput: IBuildInput): Promise<string> {
+    const { customContainerConfig } = buildInput.functionProps;
+    const { dockerFileName, imageName } = this.checkCustomContainerConfig(customContainerConfig);
+    if (this.enableBuildkitServer) {
+      execSync(`buildctl --addr tcp://localhost:${this.buildkitServerPort} build --no-cache \
+            --frontend dockerfile.v0 \
+            --local context=${path.dirname(dockerFileName)} \
+            --local dockerfile=${path.dirname(dockerFileName)} \
+            --output type=image,name=${imageName}`, {
+        stdio: 'inherit',
+      });
+    } else {
+      execSync(`buildctl build --no-cache \
+            --frontend dockerfile.v0 \
+            --local context=${path.dirname(dockerFileName)} \
+            --local dockerfile=${path.dirname(dockerFileName)} \
+            --output type=image,name=${imageName}`, {
+        stdio: 'inherit',
+      });
+    }
+
+    return imageName;
+  }
+
+  async buildImage(buildInput: IBuildInput): Promise<string> {
+    const { customContainerConfig } = buildInput.functionProps;
+    const { dockerFileName, imageName } = this.checkCustomContainerConfig(customContainerConfig);
 
     this.logger.info('Building image...');
     execSync(`docker build -t ${imageName} -f ${dockerFileName} .`, {
@@ -68,24 +138,32 @@ export default class Builder {
   }
 
   async build(buildInput: IBuildInput): Promise<IBuildOutput> {
-    const { useDocker } = this;
+    const { useDocker, useBuildkit } = this;
     const { functionProps } = buildInput;
     const { codeUri, runtime } = functionProps;
     const baseDir = this.configDirPath;
     const isContainer = runtime === 'custom-container';
-    if (useDocker || isContainer) {
+    if (useBuildkit) {
+      this.logger.info('Use buildkit for building.');
+    } else if (useDocker || isContainer) {
       this.logger.info('Use docker for building.');
     }
 
     this.logger.debug(`[${this.projectName}] Runtime is ${runtime}.`);
 
     if (isContainer) {
-      const image = await this.buildImage(buildInput);
+      let image: string;
+      if (this.useBuildkit) {
+        image = await this.buildImageWithBuildkit(buildInput);
+      } else {
+        image = await this.buildImage(buildInput);
+      }
       return { image };
     }
 
     const src = checkCodeUri(codeUri);
     const funfilePath = await getFunfile({ codeUri: src, runtime, baseDir });
+
     const codeSkipBuild = funfilePath || await this.codeSkipBuild({ baseDir, codeUri, runtime });
     this.logger.debug(`[${this.projectName}] Code skip build: ${codeSkipBuild}.`);
 
@@ -93,14 +171,72 @@ export default class Builder {
       return {};
     }
 
-    let buildSaveUri: string;
-    if (useDocker || funfilePath) {
-      buildSaveUri = await this.buildInDocker(buildInput, src);
+    const resolvedCodeUri = path.join(baseDir, src);
+
+    const funcArtifactDir = await this.initBuildArtifactDir({ baseDir, serviceName: buildInput.serviceProps.name, functionName: buildInput.functionProps.name });
+    const buildSaveUri = funcArtifactDir;
+    if (useBuildkit) {
+      await this.buildInBuildtkit(buildInput, baseDir, resolvedCodeUri, funcArtifactDir, funfilePath);
+    } else if (useDocker || funfilePath) {
+      await this.buildInDocker(buildInput, baseDir, resolvedCodeUri, funcArtifactDir);
     } else {
-      buildSaveUri = await this.buildArtifact(buildInput, src);
+      await this.buildArtifact(buildInput, baseDir, resolvedCodeUri, funcArtifactDir);
     }
 
     return { buildSaveUri };
+  }
+
+  private async buildInBuildtkit({
+    region,
+    serviceProps,
+    functionName,
+    functionProps,
+    verbose = true,
+    credentials,
+  }: IBuildInput, baseDir: string, codeUri: string, funcArtifactDir: string, funfilePath: string): Promise<void> {
+    if (funfilePath) {
+      await processFunfileForBuildkit(serviceProps, codeUri, funfilePath, baseDir, funcArtifactDir, functionProps.runtime, functionName, this.enableBuildkitServer, this.buildkitServerPort);
+    }
+    const targetBuildStage = 'buildresult';
+    const dockerfilePath = path.join(codeUri, '.buildkit.generated.dockerfile');
+    await generateDockerfileForBuildkit(credentials, region, dockerfilePath, serviceProps,
+      functionProps,
+      baseDir,
+      codeUri,
+      funcArtifactDir,
+      verbose,
+      Builder.stages,
+      targetBuildStage);
+    // exec build
+    if (this.enableBuildkitServer) {
+      execSync(
+        `buildctl --addr tcp://localhost:${this.buildkitServerPort} build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(dockerfilePath)} --opt filename=${path.basename(dockerfilePath)} --opt target=${targetBuildStage} --output type=local,dest=${baseDir}`, {
+          stdio: 'inherit',
+        },
+      );
+    } else {
+      execSync(
+        `buildctl build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(dockerfilePath)} --opt filename=${path.basename(dockerfilePath)} --opt target=${targetBuildStage} --output type=local,dest=${baseDir}`, {
+          stdio: 'inherit',
+        },
+      );
+    }
+
+    // clean
+    await fs.remove(dockerfilePath);
+    const dockerfileInArtifact = path.join(funcArtifactDir, path.basename(dockerfilePath));
+    if (await fs.pathExists(dockerfileInArtifact)) {
+      await fs.remove(dockerfileInArtifact);
+    }
+    const passwdMount = await resolvePasswdMount(baseDir);
+    if (passwdMount) {
+      const pwdFilePath = passwdMount.Source;
+      await fs.remove(pwdFilePath);
+      const pwdFileInArtifact = path.join(funcArtifactDir, path.basename(pwdFilePath));
+      if (await fs.pathExists(pwdFileInArtifact)) {
+        await fs.remove(pwdFileInArtifact);
+      }
+    }
   }
 
   async buildInDocker({
@@ -111,13 +247,7 @@ export default class Builder {
     functionProps,
     verbose = true,
     credentials,
-  }: IBuildInput, src: string): Promise<string> {
-    const stages = ['install', 'build'];
-
-    const baseDir = this.configDirPath;
-    const codeUri = path.join(baseDir, src);
-    const funcArtifactDir = await this.initBuildArtifactDir({ baseDir, serviceName, functionName });
-
+  }: IBuildInput, baseDir: string, codeUri: string, funcArtifactDir: string): Promise<void> {
     const opts = await generateBuildContainerBuildOpts({
       region,
       serviceName,
@@ -129,7 +259,7 @@ export default class Builder {
       funcArtifactDir,
       verbose,
       credentials,
-      stages,
+      stages: Builder.stages,
     });
 
     this.logger.debug(
@@ -145,26 +275,22 @@ export default class Builder {
       const errorMessage = `build function ${serviceName}/${functionName} error.`;
       throw new Error(errorMessage);
     }
-    return funcArtifactDir;
   }
 
   async buildArtifact(
     { serviceName, functionName, functionProps, verbose = true }: IBuildInput,
-    src,
-  ): Promise<string> {
+    baseDir: string, codeUri: string, funcArtifactDir: string,
+  ): Promise<void> {
     process.env.BUILD_EXCLIUDE_FILES = getExcludeFilesEnv();
     process.env.TOOL_CACHE_PATH = '.s';
 
-    const baseDir = this.configDirPath;
     const { runtime } = functionProps;
 
     const stages = ['install', 'build'];
-    const codePath = path.join(baseDir, src);
 
-    const artifactPath = await this.initBuildArtifactDir({ baseDir, serviceName, functionName });
 
     // detect fcfile
-    const fcfilePath = path.resolve(codePath, 'fcfile');
+    const fcfilePath = path.resolve(codeUri, 'fcfile');
     if (fs.existsSync(fcfilePath)) {
       this.logger.log(
         "Found fcfile in src directory, maybe you want to use 's build --use-docker' ?",
@@ -175,14 +301,13 @@ export default class Builder {
     const builder = new fcBuilders.Builder(
       serviceName,
       functionName,
-      codePath,
+      codeUri,
       runtime,
-      artifactPath,
+      funcArtifactDir,
       verbose,
       stages,
     );
     await builder.build();
-    return artifactPath;
   }
 
   async codeSkipBuild({ baseDir, codeUri, runtime }: INeedBuild): Promise<boolean> {

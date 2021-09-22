@@ -1,11 +1,11 @@
 /* eslint-disable no-await-in-loop */
-// const dockerOpts = require('../docker-opts');
 
 import _ from 'lodash';
 import fs from 'fs-extra';
 import { DockerfileParser } from 'dockerfile-ast';
 import logger from '../common/logger';
 import { resolveRuntimeToDockerImage } from './get-image-name';
+
 
 const RESERVED_DOCKER_CMD = [
   'FROM', 'Add', 'ONBUILD',
@@ -23,7 +23,7 @@ export async function funfileToDockerfile(funfilePath: string, runtime: string, 
     const ins = instruction.getInstruction();
 
     if (_.includes(RESERVED_DOCKER_CMD, ins)) {
-      throw new Error(`Currently, Funfile does not support the semantics of '${ins}'. 
+      throw new Error(`Currently, Funfile does not support the semantics of '${ins}'.
 If you have a requirement, you can submit the issue at https://github.com/devsapp/fc/issues.`);
     }
 
