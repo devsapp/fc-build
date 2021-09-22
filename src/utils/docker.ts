@@ -292,7 +292,7 @@ export async function dockerRun(opts: any): Promise<any> {
   await pullImageIfNeed(opts.Image);
 
   const container = await createContainer(opts);
-  const vm = isDebug ? undefined : spinner('builder begin to build');
+  const vm = isDebug ? undefined : spinner('builder begin to build\n');
 
   const attachOpts = {
     hijack: true,
