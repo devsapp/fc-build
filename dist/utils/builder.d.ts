@@ -11,15 +11,23 @@ interface IBuildOutput {
 }
 export default class Builder {
     logger: ILogger;
-    private useDocker;
+    private readonly useDocker;
     private dockerfile;
     private projectName;
     private configDirPath;
-    constructor(projectName: string, useDocker: boolean, dockerfile: string, configPath: string);
+    private readonly useBuildkit;
+    private readonly enableBuildkitServer;
+    private readonly buildkitServerPort;
+    static stages: string[];
+    static defaultbuildkitServerPort: number;
+    constructor(projectName: string, useDocker: boolean, dockerfile: string, configPath: string, useBuildkit: boolean);
+    private checkCustomContainerConfig;
+    private buildImageWithBuildkit;
     buildImage(buildInput: IBuildInput): Promise<string>;
     build(buildInput: IBuildInput): Promise<IBuildOutput>;
-    buildInDocker({ region, serviceName, serviceProps, functionName, functionProps, verbose, credentials, }: IBuildInput, src: string): Promise<string>;
-    buildArtifact({ serviceName, functionName, functionProps, verbose }: IBuildInput, src: any): Promise<string>;
+    private buildInBuildtkit;
+    buildInDocker({ region, serviceName, serviceProps, functionName, functionProps, verbose, credentials, }: IBuildInput, baseDir: string, codeUri: string, funcArtifactDir: string): Promise<void>;
+    buildArtifact({ serviceName, functionName, functionProps, verbose }: IBuildInput, baseDir: string, codeUri: string, funcArtifactDir: string): Promise<void>;
     codeSkipBuild({ baseDir, codeUri, runtime }: INeedBuild): Promise<boolean>;
     isOnlyDefaultTaskFlow(taskFlows: any): boolean;
     initBuildArtifactDir({ baseDir, serviceName, functionName }: IBuildDir): Promise<string>;
