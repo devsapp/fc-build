@@ -77,7 +77,7 @@ export async function generateBuildContainerBuildOpts({
   const cmd = ['fun-install', 'build', '--json-params', JSON.stringify(params)];
 
   let imageName: string;
-  const filePath = await getFunfile({ codeUri, runtime, baseDir });
+  const { checklistFilePath: filePath } = await getFunfile({ codeUri, runtime, baseDir });
   if (filePath) {
     imageName = await processFunfile(serviceName, codeUri, filePath, funcArtifactDir, runtime, functionName);
   }

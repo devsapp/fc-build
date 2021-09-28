@@ -1,5 +1,6 @@
 import _ from 'lodash';
 import path from 'path';
+import uuid from 'uuid';
 import fs from 'fs-extra';
 import logger from '../common/logger';
 import * as parser from './parser';
@@ -8,8 +9,6 @@ import { buildImage, copyFromImage } from './docker';
 import { IServiceProps } from '../interface';
 import { formatDockerfileForBuildkit } from './buildkit';
 import { execSync } from 'child_process';
-
-const uuid = require('uuid');
 
 async function fileExists(filePath: string) {
   if (await fs.pathExists(filePath)) {
@@ -20,7 +19,11 @@ async function fileExists(filePath: string) {
 
 export async function getFunfile({
   codeUri, runtime, baseDir,
-}: { codeUri: string; runtime: string; baseDir: string }): Promise<string | undefined> {
+}: {
+  codeUri: string;
+  runtime: string;
+  baseDir: string;
+}): Promise<{ funfileExists: boolean; aptListExists: boolean; checklistFilePath?: string }> {
   const funfilePath = path.join(codeUri, 'Funfile');
   const funfileExists = await fileExists(funfilePath);
   logger.debug(`Funfile path: ${funfilePath}; has Funfile: ${funfileExists}`);
@@ -40,13 +43,27 @@ export async function getFunfile({
       }
       const cacheFilePath = path.join(baseDir, '.s', 'cacheFunfile');
       await fs.outputFile(cacheFilePath, fileStr);
-      return cacheFilePath;
+      // process.platform
+      return {
+        checklistFilePath: cacheFilePath,
+        funfileExists,
+        aptListExists,
+      };
     }
   }
 
   if (funfileExists) {
-    return funfilePath;
+    return {
+      checklistFilePath: funfilePath,
+      funfileExists,
+      aptListExists,
+    };
   }
+
+  return {
+    funfileExists,
+    aptListExists,
+  };
 }
 
 async function converAptFileToFunfile(filePath: string, command: string) {

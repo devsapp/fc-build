@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/member-ordering */
 import { HLogger, ILogger } from '@serverless-devs/core';
 import fs from 'fs-extra';
 import path from 'path';
@@ -162,7 +163,12 @@ export default class Builder {
     }
 
     const src = checkCodeUri(codeUri);
-    const funfilePath = await getFunfile({ codeUri: src, runtime, baseDir });
+    const {
+      checklistFilePath: funfilePath,
+      funfileExists,
+      // aptListExists,
+    } = await getFunfile({ codeUri: src, runtime, baseDir });
+    // await this._exec(['sudo', 'apt-get', 'install', '-y', '-d', `-o=dir::cache=${this.cacheDir}`, ...pkgName, '--reinstall', '--no-install-recommends']);
 
     const codeSkipBuild = funfilePath || await this.codeSkipBuild({ baseDir, codeUri, runtime });
     this.logger.debug(`[${this.projectName}] Code skip build: ${codeSkipBuild}.`);
@@ -177,7 +183,7 @@ export default class Builder {
     const buildSaveUri = funcArtifactDir;
     if (useBuildkit) {
       await this.buildInBuildtkit(buildInput, baseDir, resolvedCodeUri, funcArtifactDir, funfilePath);
-    } else if (useDocker || funfilePath) {
+    } else if (useDocker || funfileExists) {
       await this.buildInDocker(buildInput, baseDir, resolvedCodeUri, funcArtifactDir);
     } else {
       await this.buildArtifact(buildInput, baseDir, resolvedCodeUri, funcArtifactDir);
