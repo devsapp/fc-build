@@ -7,7 +7,7 @@ import Docker from 'dockerode';
 import DraftLog from 'draftlog';
 import generatePwdFile from './passwd';
 import findPathsOutofSharedPaths from './docker-support';
-import { resolveLibPathsFromLdConf, checkCodeUri, getExcludeFilesEnv, isDebug } from './utils';
+import { resolveLibPathsFromLdConf, checkCodeUri, getExcludeFilesEnv, isDebug, isInterpretedLanguage } from './utils';
 import { generateDebugEnv, addEnv } from './env';
 import { CONTEXT, DEFAULT_REGISTRY } from './constant';
 import { IServiceProps, IFunctionProps, IObject, ICredentials } from '../interface';
@@ -232,6 +232,7 @@ export async function generateDockerEnvs({
     FC_TIMEOUT: functionProps.timeout || 3,
     FC_INITIALIZER: functionProps.initializer,
     FC_INITIALIZATIONIMEOUT: functionProps.initializationTimeout || 3,
+    ONLY_CPOY_MANIFEST_FILE: isInterpretedLanguage(runtime) ? 'true' : '',
     FC_SERVICE_NAME: serviceName,
     // @ts-ignore: 多类型，动态判断
     FC_SERVICE_LOG_PROJECT: ((serviceProps || {}).logConfig || {}).project,

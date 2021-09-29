@@ -1,11 +1,11 @@
-import { HLogger, ILogger } from '@serverless-devs/core';
+import { HLogger, ILogger, loadComponent } from '@serverless-devs/core';
 import fs from 'fs-extra';
 import path from 'path';
 import rimraf from 'rimraf';
 import _ from 'lodash';
 import fcBuilders from '@alicloud/fc-builders';
 import { execSync } from 'child_process';
-import { checkCodeUri, getArtifactPath, getExcludeFilesEnv } from './utils';
+import { checkCodeUri, getArtifactPath, getExcludeFilesEnv, isInterpretedLanguage } from './utils';
 import { generateBuildContainerBuildOpts } from './build-opts';
 import { dockerRun, resolvePasswdMount } from './docker';
 import { CONTEXT } from './constant';
@@ -183,6 +183,14 @@ export default class Builder {
       await this.buildArtifact(buildInput, baseDir, resolvedCodeUri, funcArtifactDir);
     }
 
+    const fcBuildLink = await loadComponent('devsapp/fc-build-link');
+    await fcBuildLink.linkWithProps({
+      configDirPath: baseDir,
+      codeUri: src,
+      serviceName: buildInput.serviceName,
+      functionName: buildInput.functionName,
+    });
+
     return { buildSaveUri };
   }
 
@@ -286,8 +294,11 @@ export default class Builder {
 
     const { runtime } = functionProps;
 
-    const stages = ['install', 'build'];
+    if (isInterpretedLanguage(runtime)) {
+      process.env.ONLY_CPOY_MANIFEST_FILE = 'true';
+    }
 
+    const stages = ['install', 'build'];
 
     // detect fcfile
     const fcfilePath = path.resolve(codeUri, 'fcfile');
