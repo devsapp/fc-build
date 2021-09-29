@@ -114,3 +114,7 @@ export async function resolveLibPathsFromLdConf(
   }
   return envs;
 }
+
+export function isInterpretedLanguage(runtime: string) {
+  return runtime.startsWith('node') || runtime.startsWith('python') || runtime.startsWith('php');
+}
