@@ -1,4 +1,5 @@
-import { reportComponent, commandParse, help } from '@serverless-devs/core';
+import { reportComponent, commandParse, help, setState } from '@serverless-devs/core';
+import path from 'path';
 import Builder from './utils/builder';
 import { IInputs, IBuildInput } from './interface';
 import { CONTEXT, HELP, CONTEXT_NAME } from './utils/constant';
@@ -10,6 +11,12 @@ interface IOutput {
   image?: string;
   buildSaveUri?: string;
 }
+
+const STATUS = {
+  available: 'available',
+  unavailable: 'unavailable',
+};
+const statusPath = path.join(process.cwd(), '.s', 'fc-build');
 
 export default class Build {
   async build(inputs: IInputs) {
@@ -46,19 +53,23 @@ export default class Build {
       throw new Error('Parameter function.runtime is required');
     }
 
+    const serviceName = serviceProps.name;
+    const functionName = functionProps.name;
     const params: IBuildInput = {
       region,
       serviceProps,
       functionProps,
+      serviceName,
+      functionName,
       credentials: {
         AccountID: '',
         AccessKeyID: '',
         AccessKeySecret: '',
       },
-      serviceName: serviceProps.name,
-      functionName: functionProps.name,
     };
 
+    const stateId = this.getStateId(serviceName, functionName);
+    await setState(stateId, { status: STATUS.unavailable }, statusPath);
     const builder = new Builder(projectName, useDocker, dockerfile, inputs?.path?.configPath, useBuildkit);
 
     const output: IOutput = {
@@ -74,6 +85,11 @@ export default class Build {
     }
 
     Logger.info('Build artifact successfully.');
+    await setState(stateId, { status: STATUS.available }, statusPath);
     return output;
+  }
+
+  private getStateId(serviceName: string, functionName: string): string {
+    return `${serviceName}-${functionName}-build`;
   }
 }
