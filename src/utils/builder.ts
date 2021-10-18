@@ -183,13 +183,15 @@ export default class Builder {
       await this.buildArtifact(buildInput, baseDir, resolvedCodeUri, funcArtifactDir);
     }
 
-    const fcBuildLink = await loadComponent('devsapp/fc-build-link');
-    await fcBuildLink.linkWithProps({
-      configDirPath: baseDir,
-      codeUri: src,
-      serviceName: buildInput.serviceName,
-      functionName: buildInput.functionName,
-    });
+    if (runtime.startsWith('node') || runtime.startsWith('python') || runtime.startsWith('php')) {
+      const fcBuildLink = await loadComponent('devsapp/fc-build-link');
+      await fcBuildLink.linkWithProps({
+        configDirPath: baseDir,
+        codeUri: src,
+        serviceName: buildInput.serviceName,
+        functionName: buildInput.functionName,
+      });
+    }
 
     return { buildSaveUri };
   }
