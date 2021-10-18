@@ -1,6 +1,6 @@
 {
   "name": "fc-build",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "main": "./dist/index.js",
   "fc-docker": {
     "version": "1.9.21",

@@ -2,7 +2,7 @@ Type: Component
 Name: fc-build
 Provider:
   - 阿里云
-Version: 0.0.16
+Version: 0.0.17
 Description: 阿里云函数计算构建功能
 HomePage: https://github.com/devsapp/fc-build
 Tags: #标签详情
