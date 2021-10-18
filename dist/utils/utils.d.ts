@@ -7,3 +7,4 @@ export declare function checkCodeUri(codeUri: string | ICodeUri): string;
 export declare function getArtifactPath({ baseDir, serviceName, functionName }: IBuildDir): string;
 export declare function readLines(fileName: string): Promise<string[]>;
 export declare function resolveLibPathsFromLdConf(baseDir: string, codeUri: string): Promise<IObject>;
+export declare function isInterpretedLanguage(runtime: string): boolean;
