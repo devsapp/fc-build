@@ -78,25 +78,20 @@ export default class Builder {
   }
 
   private checkCustomContainerConfig(customContainerConfig: any): {dockerFileName: string; imageName: string} {
-    if (!customContainerConfig) {
-      const errorMessage = "No 'CustomContainer' configuration found in Function.";
+    if (_.isEmpty(customContainerConfig?.image)) {
+      const errorMessage = 'function::customContainer::image atttribute value is empty in the configuration file.';
       throw new Error(errorMessage);
     }
 
     const dockerFileName = path.resolve(this.dockerfile || 'Dockerfile');
     if (!fs.existsSync(dockerFileName)) {
-      const errorMessage = 'Cannot find the Dockerfile file, please make sure the Dockerfile file exists in the current working directory, or specify the Dockerfile file path through --dockerfile <path>';
-      throw new Error(errorMessage);
+      const msg = 'Cannot find the Dockerfile file, please make sure the Dockerfile file exists in the current working directory, or specify the Dockerfile file path through --dockerfile <path>';
+      throw new Error(msg);
     }
 
-    const imageName = customContainerConfig.image;
-    if (!imageName) {
-      const errorMessage = 'Function/CustomContainer/Image required.';
-      throw new Error(errorMessage);
-    }
     return {
       dockerFileName,
-      imageName,
+      imageName: customContainerConfig.image,
     };
   }
 
