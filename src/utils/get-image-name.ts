@@ -7,6 +7,7 @@ const runtimeImageMap = {
   nodejs8: 'nodejs8',
   nodejs10: 'nodejs10',
   nodejs12: 'nodejs12',
+  nodejs14: 'nodejs14',
   'python2.7': 'python2.7',
   python3: 'python3.6',
   java8: 'java8',

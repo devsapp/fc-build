@@ -17,7 +17,7 @@ if (isNccPath(__dirname)) {
 const { FC_DOCKER_VERSION } = process.env;
 export const DEFAULT_REGISTRY = pkg['fc-docker'].registry_default || 'registry.hub.docker.com';
 export const DOCKER_REGISTRIES = pkg['fc-docker'].registry_mirrors || ['registry.hub.docker.com'];
-export const IMAGE_VERSION = FC_DOCKER_VERSION || pkg['fc-docker'].version || '1.9.21';
+export const IMAGE_VERSION = FC_DOCKER_VERSION || pkg['fc-docker'].version || '1.10.0';
 
 export const HELP = [
   {

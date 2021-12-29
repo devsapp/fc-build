@@ -86,6 +86,7 @@ export function generateDebugEnv(runtime: string, debugPort?: string, debugIde?:
   const remoteIp = ip.address();
 
   switch (runtime) {
+    case 'nodejs14':
     case 'nodejs12':
     case 'nodejs10':
     case 'nodejs8':
