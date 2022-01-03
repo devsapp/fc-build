@@ -1,23 +1,7 @@
-import { isNccPath } from './path';
-import path from 'path';
-
 export const SUPPORTRUNTIMEBUILDList = ['nodejs', 'python', 'php', 'custom'];
 
 export const CONTEXT = 'FC-BUILD';
 export const CONTEXT_NAME = 'fc-build';
-
-let pkg;
-if (isNccPath(__dirname)) {
-  // ncc compiler
-  pkg = require(path.join(path.resolve(__dirname, '..'), 'package.json'));
-} else {
-  pkg = require(path.join(path.resolve(__dirname, '..', '..'), 'package.json'));
-}
-
-const { FC_DOCKER_VERSION } = process.env;
-export const DEFAULT_REGISTRY = pkg['fc-docker'].registry_default || 'registry.hub.docker.com';
-export const DOCKER_REGISTRIES = pkg['fc-docker'].registry_mirrors || ['registry.hub.docker.com'];
-export const IMAGE_VERSION = FC_DOCKER_VERSION || pkg['fc-docker'].version || '1.9.21';
 
 export const HELP = [
   {

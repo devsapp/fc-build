@@ -4,8 +4,7 @@ import _ from 'lodash';
 import fs from 'fs-extra';
 import { DockerfileParser } from 'dockerfile-ast';
 import logger from '../common/logger';
-import { resolveRuntimeToDockerImage } from './get-image-name';
-
+import * as fcCore from '@serverless-devs/fc-core';
 
 const RESERVED_DOCKER_CMD = [
   'FROM', 'Add', 'ONBUILD',
@@ -40,7 +39,7 @@ If you have a requirement, you can submit the issue at https://github.com/devsap
         logger.warning(`\nDetectionWarning: The 'runtime' of '${serviceName}/${functionName}' in your yml is inconsistent with that in Funfile.`);
       }
 
-      const imageName = await resolveRuntimeToDockerImage(runtimeOfFunfile);
+      const imageName = await fcCore.resolveRuntimeToDockerImage(runtimeOfFunfile);
       dockerfile.push(`FROM ${ imageName } as ${runtimeOfFunfile}`);
     } else {
       const range = instruction.getRange();

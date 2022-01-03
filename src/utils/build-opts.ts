@@ -2,8 +2,8 @@ import _ from 'lodash';
 import path from 'path';
 import nestedObjectAssign from 'nested-object-assign';
 import * as docker from './docker';
+import * as fcCore from '@serverless-devs/fc-core';
 import { IServiceProps, IFunctionProps, ICredentials } from '../interface';
-import { resolveRuntimeToDockerImage } from './get-image-name';
 import { processFunfile, getFunfile } from './install-file';
 import { addEnv } from './env';
 
@@ -113,7 +113,7 @@ async function generateContainerBuildOpts(
   const opts = nestedObjectAssign(
     {
       Env: resolveDockerEnv(envs),
-      Image: imageName || await resolveRuntimeToDockerImage(runtime),
+      Image: imageName || await fcCore.resolveRuntimeToDockerImage(runtime),
       name: containerName,
       Cmd: cmd,
       User: resolveDockerUser(),

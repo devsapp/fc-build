@@ -9,7 +9,8 @@ import generatePwdFile from './passwd';
 import findPathsOutofSharedPaths from './docker-support';
 import { resolveLibPathsFromLdConf, checkCodeUri, getExcludeFilesEnv, isDebug, isInterpretedLanguage } from './utils';
 import { generateDebugEnv, addEnv } from './env';
-import { CONTEXT, DEFAULT_REGISTRY } from './constant';
+import { CONTEXT } from './constant';
+import * as fcCore from '@serverless-devs/fc-core';
 import { IServiceProps, IFunctionProps, IObject, ICredentials } from '../interface';
 
 DraftLog.into(console);
@@ -57,7 +58,7 @@ async function createContainer(opts): Promise<any> {
       }
     }
   }
-  const dockerToolBox = await isDockerToolBoxAndEnsureDockerVersion();
+  const dockerToolBox = await fcCore.isDockerToolBox();
 
   let container;
   try {
@@ -76,42 +77,6 @@ async function createContainer(opts): Promise<any> {
     throw ex;
   }
   return container;
-}
-
-async function isDockerToolBoxAndEnsureDockerVersion(): Promise<boolean> {
-  const dockerInfo = await docker.info();
-  Logger.debug(CONTEXT, `Docker info: ${JSON.stringify(dockerInfo)}`);
-
-  await detectDockerVersion(dockerInfo.ServerVersion || '');
-
-  const obj = (dockerInfo.Labels || [])
-    .map((e) => _.split(e, '=', 2))
-    .filter((e) => e.length === 2)
-    .reduce((acc, cur) => {
-      acc[cur[0]] = cur[1];
-      return acc;
-    }, {});
-
-  return process.platform === 'win32' && obj.provider === 'virtualbox';
-}
-
-async function detectDockerVersion(serverVersion: string): Promise<void> {
-  const cur = serverVersion.split('.');
-  // 1.13.1
-  if (Number.parseInt(cur[0]) === 1 && Number.parseInt(cur[1]) <= 13) {
-    const errorMessage = `We detected that your docker version is ${serverVersion}, for a better experience, please upgrade the docker version.`;
-    throw new Error(errorMessage);
-  }
-}
-
-async function imageExist(imageName: string): Promise<boolean> {
-  const images = await docker.listImages({
-    filters: {
-      reference: [imageName],
-    },
-  });
-
-  return images.length > 0;
 }
 
 function followProgress(stream, onFinished) {
@@ -143,33 +108,6 @@ function followProgress(stream, onFinished) {
   };
 
   docker.modem.followProgress(stream, onFinished, onProgress);
-}
-
-async function pullImage(imageName: string): Promise<void> {
-  const stream = await docker.pull(imageName);
-
-  const registry = DEFAULT_REGISTRY;
-
-  return await new Promise((resolve, reject) => {
-    Logger.info(
-      CONTEXT,
-      `begin pulling image ${imageName}, you can also use docker pull ${imageName} to pull image by yourself.`,
-    );
-
-    const onFinished = async (err) => {
-      containers.delete(stream);
-
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve(registry);
-    };
-
-    containers.add(stream);
-    // pull image progress
-    followProgress(stream, onFinished);
-  });
 }
 
 export function generateRamdomContainerName(): string {
@@ -339,15 +277,7 @@ export async function dockerRun(opts: any): Promise<any> {
 }
 
 export async function pullImageIfNeed(imageName: string): Promise<void> {
-  Logger.debug(CONTEXT, `Determine whether the docker image '${imageName}' exists.`);
-  const exist = await imageExist(imageName);
-  Logger.debug(CONTEXT, `Iamge '${imageName}' ${exist ? 'exists' : 'not exists'}.`);
-
-  if (!exist) {
-    await pullImage(imageName);
-  } else {
-    Logger.info(CONTEXT, `skip pulling image ${imageName}...`);
-  }
+  return await fcCore.pullImageIfNeed(docker, imageName);
 }
 
 export function buildImage(dockerBuildDir: string, dockerfilePath: string, imageTag: string): Promise<string> {

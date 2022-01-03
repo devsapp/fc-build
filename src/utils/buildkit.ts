@@ -6,7 +6,7 @@ import { generateDockerfileEnvs, resolveCodeUriToMount } from './docker';
 import { ICredentials, IFunctionProps, IServiceProps } from '../interface';
 import * as _ from 'lodash';
 import generatePwdFile from './passwd';
-import { resolveRuntimeToDockerImage } from './get-image-name';
+import * as fcCore from '@serverless-devs/fc-core';
 
 export async function formatDockerfileForBuildkit(dockerfilePath: string, fromSrcToDstPairs: Array<{src: string; dst: string}>, baseDir: string, targetBuildStage: string) {
   if (!fromSrcToDstPairs) {
@@ -117,7 +117,7 @@ function generateSrcDstPairsFromMounts(mountsInDocker) {
 }
 
 async function dockerfileForBuildkit(runtime: string, fromSrcToDstPairsInOutput: any, fromSrcToDstPairsInBuild: any, contentDir: string, targetBuildStage: string, envs: any, cmd: string, workdir?: string) {
-  const image = await resolveRuntimeToDockerImage(runtime);
+  const image = await fcCore.resolveRuntimeToDockerImage(runtime);
 
   const content = [];
   content.push(`FROM ${ image } as ${runtime}`);
