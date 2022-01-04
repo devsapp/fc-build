@@ -56,6 +56,10 @@ export function getArtifactPath({ baseDir, serviceName, functionName }: IBuildDi
   return path.join(rootArtifact, serviceName, functionName);
 }
 
+export function getBuildFilesListJSONPath(baseDir: string, serviceName: string, functionName: string) {
+  return path.join(baseDir, '.s', 'fc-build-link', `${serviceName}-${functionName}-files_list.json`);
+}
+
 export function readLines(fileName: string): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const lines = [];

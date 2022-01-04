@@ -5,7 +5,7 @@ import rimraf from 'rimraf';
 import _ from 'lodash';
 import fcBuilders from '@alicloud/fc-builders';
 import { execSync } from 'child_process';
-import { checkCodeUri, getArtifactPath, getExcludeFilesEnv, isInterpretedLanguage } from './utils';
+import { checkCodeUri, getArtifactPath, getExcludeFilesEnv, isInterpretedLanguage, getBuildFilesListJSONPath } from './utils';
 import { generateBuildContainerBuildOpts } from './build-opts';
 import { dockerRun, resolvePasswdMount } from './docker';
 import { CONTEXT } from './constant';
@@ -351,7 +351,6 @@ export default class Builder {
 
   async initBuildArtifactDir({ baseDir, serviceName, functionName }: IBuildDir): Promise<string> {
     const artifactPath = getArtifactPath({ baseDir, serviceName, functionName });
-
     this.logger.debug(`[${this.projectName}] Build save url: ${artifactPath}.`);
 
     if (fs.pathExistsSync(artifactPath)) {
@@ -371,6 +370,14 @@ export default class Builder {
     this.logger.debug(`[${this.projectName}] Create build folder.`);
     fs.mkdirpSync(artifactPath);
     this.logger.debug(`[${this.projectName}] Created build folder successfully.`);
+
+    // 每次 build 之前清除 build-link 的缓存，防止生成连接判断条件失效
+    try {
+      const buildFilesListJSONPath = getBuildFilesListJSONPath(baseDir, serviceName, functionName);
+      this.logger.debug(`[${this.projectName}] Build link save url: ${buildFilesListJSONPath}.`);
+      await fs.remove(buildFilesListJSONPath);
+    } catch (_ex) { /** 如果异常不阻塞主进程运行 */ }
+
     return artifactPath;
   }
 }
