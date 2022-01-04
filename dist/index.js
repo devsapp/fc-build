@@ -2310,7 +2310,7 @@ module.exports = copy
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(8284)/* .fromCallback */ .E
 module.exports = {
   copy: u(__webpack_require__(1147))
 }
@@ -2324,7 +2324,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(8284)/* .fromCallback */ .E
 const fs = __webpack_require__(7758)
 const path = __webpack_require__(5622)
 const mkdir = __webpack_require__(4814)
@@ -2380,7 +2380,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(8284)/* .fromCallback */ .E
 const path = __webpack_require__(5622)
 const fs = __webpack_require__(7758)
 const mkdir = __webpack_require__(4814)
@@ -2468,7 +2468,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(8284)/* .fromCallback */ .E
 const path = __webpack_require__(5622)
 const fs = __webpack_require__(7758)
 const mkdir = __webpack_require__(4814)
@@ -2683,7 +2683,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(8284)/* .fromCallback */ .E
 const path = __webpack_require__(5622)
 const fs = __webpack_require__(7758)
 const _mkdirs = __webpack_require__(4814)
@@ -2755,7 +2755,7 @@ module.exports = {
 
 // This is adapted from https://github.com/normalize/mz
 // Copyright (c) 2014-2016 Jonathan Ong me@jongleberry.com and Contributors
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(8284)/* .fromCallback */ .E
 const fs = __webpack_require__(7758)
 
 const api = [
@@ -2907,7 +2907,7 @@ if (Object.getOwnPropertyDescriptor(fs, 'promises')) {
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(8284)/* .fromCallback */ .E
 const jsonFile = __webpack_require__(6857)
 
 jsonFile.outputJson = u(__webpack_require__(6270))
@@ -2931,8 +2931,8 @@ module.exports = jsonFile
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
-const jsonFile = __webpack_require__(6160)
+const u = __webpack_require__(8284)/* .fromCallback */ .E
+const jsonFile = __webpack_require__(3314)
 
 module.exports = {
   // jsonfile exports
@@ -3011,7 +3011,7 @@ module.exports = outputJson
 
 "use strict";
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(8284)/* .fromCallback */ .E
 const mkdirs = u(__webpack_require__(6640))
 const mkdirsSync = __webpack_require__(2304)
 
@@ -3268,7 +3268,7 @@ module.exports = moveSync
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(8284)/* .fromCallback */ .E
 module.exports = {
   move: u(__webpack_require__(6963))
 }
@@ -3355,7 +3355,7 @@ module.exports = move
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(8284)/* .fromCallback */ .E
 const fs = __webpack_require__(7758)
 const path = __webpack_require__(5622)
 const mkdir = __webpack_require__(4814)
@@ -3402,7 +3402,7 @@ module.exports = {
 
 "use strict";
 
-const u = __webpack_require__(9046)/* .fromPromise */ .p
+const u = __webpack_require__(8284)/* .fromPromise */ .p
 const fs = __webpack_require__(5509)
 
 function pathExists (path) {
@@ -3423,7 +3423,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(8284)/* .fromCallback */ .E
 const rimraf = __webpack_require__(4478)
 
 module.exports = {
@@ -4038,6 +4038,180 @@ module.exports = {
   timeRemoveMillis,
   utimesMillis,
   utimesMillisSync
+}
+
+
+/***/ }),
+
+/***/ 3314:
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var _fs
+try {
+  _fs = __webpack_require__(7758)
+} catch (_) {
+  _fs = __webpack_require__(5747)
+}
+
+function readFile (file, options, callback) {
+  if (callback == null) {
+    callback = options
+    options = {}
+  }
+
+  if (typeof options === 'string') {
+    options = {encoding: options}
+  }
+
+  options = options || {}
+  var fs = options.fs || _fs
+
+  var shouldThrow = true
+  if ('throws' in options) {
+    shouldThrow = options.throws
+  }
+
+  fs.readFile(file, options, function (err, data) {
+    if (err) return callback(err)
+
+    data = stripBom(data)
+
+    var obj
+    try {
+      obj = JSON.parse(data, options ? options.reviver : null)
+    } catch (err2) {
+      if (shouldThrow) {
+        err2.message = file + ': ' + err2.message
+        return callback(err2)
+      } else {
+        return callback(null, null)
+      }
+    }
+
+    callback(null, obj)
+  })
+}
+
+function readFileSync (file, options) {
+  options = options || {}
+  if (typeof options === 'string') {
+    options = {encoding: options}
+  }
+
+  var fs = options.fs || _fs
+
+  var shouldThrow = true
+  if ('throws' in options) {
+    shouldThrow = options.throws
+  }
+
+  try {
+    var content = fs.readFileSync(file, options)
+    content = stripBom(content)
+    return JSON.parse(content, options.reviver)
+  } catch (err) {
+    if (shouldThrow) {
+      err.message = file + ': ' + err.message
+      throw err
+    } else {
+      return null
+    }
+  }
+}
+
+function stringify (obj, options) {
+  var spaces
+  var EOL = '\n'
+  if (typeof options === 'object' && options !== null) {
+    if (options.spaces) {
+      spaces = options.spaces
+    }
+    if (options.EOL) {
+      EOL = options.EOL
+    }
+  }
+
+  var str = JSON.stringify(obj, options ? options.replacer : null, spaces)
+
+  return str.replace(/\n/g, EOL) + EOL
+}
+
+function writeFile (file, obj, options, callback) {
+  if (callback == null) {
+    callback = options
+    options = {}
+  }
+  options = options || {}
+  var fs = options.fs || _fs
+
+  var str = ''
+  try {
+    str = stringify(obj, options)
+  } catch (err) {
+    // Need to return whether a callback was passed or not
+    if (callback) callback(err, null)
+    return
+  }
+
+  fs.writeFile(file, str, options, callback)
+}
+
+function writeFileSync (file, obj, options) {
+  options = options || {}
+  var fs = options.fs || _fs
+
+  var str = stringify(obj, options)
+  // not sure if fs.writeFileSync returns anything, but just in case
+  return fs.writeFileSync(file, str, options)
+}
+
+function stripBom (content) {
+  // we do this because JSON.parse would convert it to a utf8 string if encoding wasn't specified
+  if (Buffer.isBuffer(content)) content = content.toString('utf8')
+  content = content.replace(/^\uFEFF/, '')
+  return content
+}
+
+var jsonfile = {
+  readFile: readFile,
+  readFileSync: readFileSync,
+  writeFile: writeFile,
+  writeFileSync: writeFileSync
+}
+
+module.exports = jsonfile
+
+
+/***/ }),
+
+/***/ 8284:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+
+exports.E = function (fn) {
+  return Object.defineProperty(function () {
+    if (typeof arguments[arguments.length - 1] === 'function') fn.apply(this, arguments)
+    else {
+      return new Promise((resolve, reject) => {
+        arguments[arguments.length] = (err, res) => {
+          if (err) return reject(err)
+          resolve(res)
+        }
+        arguments.length++
+        fn.apply(this, arguments)
+      })
+    }
+  }, 'name', { value: fn.name })
+}
+
+exports.p = function (fn) {
+  return Object.defineProperty(function () {
+    const cb = arguments[arguments.length - 1]
+    if (typeof cb !== 'function') return fn.apply(this, arguments)
+    else fn.apply(this, arguments).then(r => cb(null, r), cb)
+  }, 'name', { value: fn.name })
 }
 
 
@@ -13549,7 +13723,7 @@ function setup(env) {
 
 	/**
 	* Selects a color for a debug namespace
-	* @param {String} namespace The namespace string for the for the debug instance to be colored
+	* @param {String} namespace The namespace string for the debug instance to be colored
 	* @return {Number|String} An ANSI color code for the given namespace
 	* @api private
 	*/
@@ -24750,7 +24924,7 @@ module.exports = copy
 "use strict";
 
 
-const u = __webpack_require__(746).fromCallback
+const u = __webpack_require__(9046).fromCallback
 module.exports = {
   copy: u(__webpack_require__(8834))
 }
@@ -24764,7 +24938,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(746).fromCallback
+const u = __webpack_require__(9046).fromCallback
 const fs = __webpack_require__(7758)
 const path = __webpack_require__(5622)
 const mkdir = __webpack_require__(8605)
@@ -24820,7 +24994,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(746).fromCallback
+const u = __webpack_require__(9046).fromCallback
 const path = __webpack_require__(5622)
 const fs = __webpack_require__(7758)
 const mkdir = __webpack_require__(8605)
@@ -24928,7 +25102,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(746).fromCallback
+const u = __webpack_require__(9046).fromCallback
 const path = __webpack_require__(5622)
 const fs = __webpack_require__(7758)
 const mkdir = __webpack_require__(8605)
@@ -25143,7 +25317,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(746).fromCallback
+const u = __webpack_require__(9046).fromCallback
 const path = __webpack_require__(5622)
 const fs = __webpack_require__(7758)
 const _mkdirs = __webpack_require__(8605)
@@ -25215,7 +25389,7 @@ module.exports = {
 
 // This is adapted from https://github.com/normalize/mz
 // Copyright (c) 2014-2016 Jonathan Ong me@jongleberry.com and Contributors
-const u = __webpack_require__(746).fromCallback
+const u = __webpack_require__(9046).fromCallback
 const fs = __webpack_require__(7758)
 
 const api = [
@@ -25387,7 +25561,7 @@ if (Object.getOwnPropertyDescriptor(fs, 'promises')) {
 "use strict";
 
 
-const u = __webpack_require__(746).fromPromise
+const u = __webpack_require__(9046).fromPromise
 const jsonFile = __webpack_require__(8970)
 
 jsonFile.outputJson = u(__webpack_require__(531))
@@ -25411,7 +25585,7 @@ module.exports = jsonFile
 "use strict";
 
 
-const jsonFile = __webpack_require__(7027)
+const jsonFile = __webpack_require__(6160)
 
 module.exports = {
   // jsonfile exports
@@ -25430,7 +25604,7 @@ module.exports = {
 "use strict";
 
 
-const { stringify } = __webpack_require__(9944)
+const { stringify } = __webpack_require__(5902)
 const { outputFileSync } = __webpack_require__(6570)
 
 function outputJsonSync (file, data, options) {
@@ -25450,7 +25624,7 @@ module.exports = outputJsonSync
 "use strict";
 
 
-const { stringify } = __webpack_require__(9944)
+const { stringify } = __webpack_require__(5902)
 const { outputFile } = __webpack_require__(6570)
 
 async function outputJson (file, data, options = {}) {
@@ -25469,7 +25643,7 @@ module.exports = outputJson
 
 "use strict";
 
-const u = __webpack_require__(746).fromPromise
+const u = __webpack_require__(9046).fromPromise
 const { makeDir: _makeDir, makeDirSync } = __webpack_require__(2751)
 const makeDir = u(_makeDir)
 
@@ -25709,7 +25883,7 @@ module.exports = moveSync
 "use strict";
 
 
-const u = __webpack_require__(746).fromCallback
+const u = __webpack_require__(9046).fromCallback
 module.exports = {
   move: u(__webpack_require__(2231))
 }
@@ -25796,7 +25970,7 @@ module.exports = move
 "use strict";
 
 
-const u = __webpack_require__(746).fromCallback
+const u = __webpack_require__(9046).fromCallback
 const fs = __webpack_require__(7758)
 const path = __webpack_require__(5622)
 const mkdir = __webpack_require__(8605)
@@ -25843,7 +26017,7 @@ module.exports = {
 
 "use strict";
 
-const u = __webpack_require__(746).fromPromise
+const u = __webpack_require__(9046).fromPromise
 const fs = __webpack_require__(1176)
 
 function pathExists (path) {
@@ -25864,7 +26038,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(746).fromCallback
+const u = __webpack_require__(9046).fromCallback
 const rimraf = __webpack_require__(8761)
 
 module.exports = {
@@ -26361,154 +26535,6 @@ function utimesMillisSync (path, atime, mtime) {
 module.exports = {
   utimesMillis,
   utimesMillisSync
-}
-
-
-/***/ }),
-
-/***/ 7027:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-let _fs
-try {
-  _fs = __webpack_require__(7758)
-} catch (_) {
-  _fs = __webpack_require__(5747)
-}
-const universalify = __webpack_require__(746)
-const { stringify, stripBom } = __webpack_require__(9944)
-
-async function _readFile (file, options = {}) {
-  if (typeof options === 'string') {
-    options = { encoding: options }
-  }
-
-  const fs = options.fs || _fs
-
-  const shouldThrow = 'throws' in options ? options.throws : true
-
-  let data = await universalify.fromCallback(fs.readFile)(file, options)
-
-  data = stripBom(data)
-
-  let obj
-  try {
-    obj = JSON.parse(data, options ? options.reviver : null)
-  } catch (err) {
-    if (shouldThrow) {
-      err.message = `${file}: ${err.message}`
-      throw err
-    } else {
-      return null
-    }
-  }
-
-  return obj
-}
-
-const readFile = universalify.fromPromise(_readFile)
-
-function readFileSync (file, options = {}) {
-  if (typeof options === 'string') {
-    options = { encoding: options }
-  }
-
-  const fs = options.fs || _fs
-
-  const shouldThrow = 'throws' in options ? options.throws : true
-
-  try {
-    let content = fs.readFileSync(file, options)
-    content = stripBom(content)
-    return JSON.parse(content, options.reviver)
-  } catch (err) {
-    if (shouldThrow) {
-      err.message = `${file}: ${err.message}`
-      throw err
-    } else {
-      return null
-    }
-  }
-}
-
-async function _writeFile (file, obj, options = {}) {
-  const fs = options.fs || _fs
-
-  const str = stringify(obj, options)
-
-  await universalify.fromCallback(fs.writeFile)(file, str, options)
-}
-
-const writeFile = universalify.fromPromise(_writeFile)
-
-function writeFileSync (file, obj, options = {}) {
-  const fs = options.fs || _fs
-
-  const str = stringify(obj, options)
-  // not sure if fs.writeFileSync returns anything, but just in case
-  return fs.writeFileSync(file, str, options)
-}
-
-const jsonfile = {
-  readFile,
-  readFileSync,
-  writeFile,
-  writeFileSync
-}
-
-module.exports = jsonfile
-
-
-/***/ }),
-
-/***/ 9944:
-/***/ ((module) => {
-
-function stringify (obj, { EOL = '\n', finalEOL = true, replacer = null, spaces } = {}) {
-  const EOF = finalEOL ? EOL : ''
-  const str = JSON.stringify(obj, replacer, spaces)
-
-  return str.replace(/\n/g, EOL) + EOF
-}
-
-function stripBom (content) {
-  // we do this because JSON.parse would convert it to a utf8 string if encoding wasn't specified
-  if (Buffer.isBuffer(content)) content = content.toString('utf8')
-  return content.replace(/^\uFEFF/, '')
-}
-
-module.exports = { stringify, stripBom }
-
-
-/***/ }),
-
-/***/ 746:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-
-exports.fromCallback = function (fn) {
-  return Object.defineProperty(function (...args) {
-    if (typeof args[args.length - 1] === 'function') fn.apply(this, args)
-    else {
-      return new Promise((resolve, reject) => {
-        fn.call(
-          this,
-          ...args,
-          (err, res) => (err != null) ? reject(err) : resolve(res)
-        )
-      })
-    }
-  }, 'name', { value: fn.name })
-}
-
-exports.fromPromise = function (fn) {
-  return Object.defineProperty(function (...args) {
-    const cb = args[args.length - 1]
-    if (typeof cb !== 'function') return fn.apply(this, args)
-    else fn.apply(this, args.slice(0, -1)).then(r => cb(null, r), cb)
-  }, 'name', { value: fn.name })
 }
 
 
@@ -29455,12 +29481,12 @@ function patch (fs) {
 
 "use strict";
 
-
-module.exports = (flag, argv = process.argv) => {
+module.exports = (flag, argv) => {
+	argv = argv || process.argv;
 	const prefix = flag.startsWith('-') ? '' : (flag.length === 1 ? '-' : '--');
-	const position = argv.indexOf(prefix + flag);
-	const terminatorPosition = argv.indexOf('--');
-	return position !== -1 && (terminatorPosition === -1 || position < terminatorPosition);
+	const pos = argv.indexOf(prefix + flag);
+	const terminatorPos = argv.indexOf('--');
+	return pos !== -1 && (terminatorPos === -1 ? true : pos < terminatorPos);
 };
 
 
@@ -32809,6 +32835,8 @@ const define = (object, key, value) =>
 
 const REGEX_REGEXP_RANGE = /([0-z])-([0-z])/g
 
+const RETURN_FALSE = () => false
+
 // Sanitize the range of a regular expression
 // The cases are complicated, see test cases for details
 const sanitizeRange = range => range.replace(
@@ -33067,7 +33095,7 @@ const REPLACERS = [
 const regexCache = Object.create(null)
 
 // @param {pattern}
-const makeRegex = (pattern, ignorecase) => {
+const makeRegex = (pattern, ignoreCase) => {
   let source = regexCache[pattern]
 
   if (!source) {
@@ -33078,7 +33106,7 @@ const makeRegex = (pattern, ignorecase) => {
     regexCache[pattern] = source
   }
 
-  return ignorecase
+  return ignoreCase
     ? new RegExp(source, 'i')
     : new RegExp(source)
 }
@@ -33109,7 +33137,7 @@ class IgnoreRule {
   }
 }
 
-const createRule = (pattern, ignorecase) => {
+const createRule = (pattern, ignoreCase) => {
   const origin = pattern
   let negative = false
 
@@ -33127,7 +33155,7 @@ const createRule = (pattern, ignorecase) => {
   // >   begin with a hash.
   .replace(REGEX_REPLACE_LEADING_EXCAPED_HASH, '#')
 
-  const regex = makeRegex(pattern, ignorecase)
+  const regex = makeRegex(pattern, ignoreCase)
 
   return new IgnoreRule(
     origin,
@@ -33173,12 +33201,15 @@ checkPath.convert = p => p
 
 class Ignore {
   constructor ({
-    ignorecase = true
+    ignorecase = true,
+    ignoreCase = ignorecase,
+    allowRelativePaths = false
   } = {}) {
     define(this, KEY_IGNORE, true)
 
     this._rules = []
-    this._ignorecase = ignorecase
+    this._ignoreCase = ignoreCase
+    this._allowRelativePaths = allowRelativePaths
     this._initCache()
   }
 
@@ -33196,7 +33227,7 @@ class Ignore {
     }
 
     if (checkPattern(pattern)) {
-      const rule = createRule(pattern, this._ignorecase)
+      const rule = createRule(pattern, this._ignoreCase)
       this._added = true
       this._rules.push(rule)
     }
@@ -33275,7 +33306,13 @@ class Ignore {
       // Supports nullable path
       && checkPath.convert(originalPath)
 
-    checkPath(path, originalPath, throwError)
+    checkPath(
+      path,
+      originalPath,
+      this._allowRelativePaths
+        ? RETURN_FALSE
+        : throwError
+    )
 
     return this._t(path, cache, checkUnignored, slices)
   }
@@ -33333,10 +33370,8 @@ class Ignore {
 
 const factory = options => new Ignore(options)
 
-const returnFalse = () => false
-
 const isPathValid = path =>
-  checkPath(path && checkPath.convert(path), path, returnFalse)
+  checkPath(path && checkPath.convert(path), path, RETURN_FALSE)
 
 factory.isPathValid = isPathValid
 
@@ -33913,72 +33948,61 @@ ip.fromLong = function(ipl) {
 /***/ 6160:
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
-var _fs
+let _fs
 try {
   _fs = __webpack_require__(7758)
 } catch (_) {
   _fs = __webpack_require__(5747)
 }
+const universalify = __webpack_require__(9046)
+const { stringify, stripBom } = __webpack_require__(5902)
 
-function readFile (file, options, callback) {
-  if (callback == null) {
-    callback = options
-    options = {}
-  }
-
+async function _readFile (file, options = {}) {
   if (typeof options === 'string') {
-    options = {encoding: options}
+    options = { encoding: options }
   }
 
-  options = options || {}
-  var fs = options.fs || _fs
+  const fs = options.fs || _fs
 
-  var shouldThrow = true
-  if ('throws' in options) {
-    shouldThrow = options.throws
-  }
+  const shouldThrow = 'throws' in options ? options.throws : true
 
-  fs.readFile(file, options, function (err, data) {
-    if (err) return callback(err)
+  let data = await universalify.fromCallback(fs.readFile)(file, options)
 
-    data = stripBom(data)
+  data = stripBom(data)
 
-    var obj
-    try {
-      obj = JSON.parse(data, options ? options.reviver : null)
-    } catch (err2) {
-      if (shouldThrow) {
-        err2.message = file + ': ' + err2.message
-        return callback(err2)
-      } else {
-        return callback(null, null)
-      }
+  let obj
+  try {
+    obj = JSON.parse(data, options ? options.reviver : null)
+  } catch (err) {
+    if (shouldThrow) {
+      err.message = `${file}: ${err.message}`
+      throw err
+    } else {
+      return null
     }
+  }
 
-    callback(null, obj)
-  })
+  return obj
 }
 
-function readFileSync (file, options) {
-  options = options || {}
+const readFile = universalify.fromPromise(_readFile)
+
+function readFileSync (file, options = {}) {
   if (typeof options === 'string') {
-    options = {encoding: options}
+    options = { encoding: options }
   }
 
-  var fs = options.fs || _fs
+  const fs = options.fs || _fs
 
-  var shouldThrow = true
-  if ('throws' in options) {
-    shouldThrow = options.throws
-  }
+  const shouldThrow = 'throws' in options ? options.throws : true
 
   try {
-    var content = fs.readFileSync(file, options)
+    let content = fs.readFileSync(file, options)
     content = stripBom(content)
     return JSON.parse(content, options.reviver)
   } catch (err) {
     if (shouldThrow) {
-      err.message = file + ': ' + err.message
+      err.message = `${file}: ${err.message}`
       throw err
     } else {
       return null
@@ -33986,67 +34010,53 @@ function readFileSync (file, options) {
   }
 }
 
-function stringify (obj, options) {
-  var spaces
-  var EOL = '\n'
-  if (typeof options === 'object' && options !== null) {
-    if (options.spaces) {
-      spaces = options.spaces
-    }
-    if (options.EOL) {
-      EOL = options.EOL
-    }
-  }
+async function _writeFile (file, obj, options = {}) {
+  const fs = options.fs || _fs
 
-  var str = JSON.stringify(obj, options ? options.replacer : null, spaces)
+  const str = stringify(obj, options)
 
-  return str.replace(/\n/g, EOL) + EOL
+  await universalify.fromCallback(fs.writeFile)(file, str, options)
 }
 
-function writeFile (file, obj, options, callback) {
-  if (callback == null) {
-    callback = options
-    options = {}
-  }
-  options = options || {}
-  var fs = options.fs || _fs
+const writeFile = universalify.fromPromise(_writeFile)
 
-  var str = ''
-  try {
-    str = stringify(obj, options)
-  } catch (err) {
-    // Need to return whether a callback was passed or not
-    if (callback) callback(err, null)
-    return
-  }
+function writeFileSync (file, obj, options = {}) {
+  const fs = options.fs || _fs
 
-  fs.writeFile(file, str, options, callback)
-}
-
-function writeFileSync (file, obj, options) {
-  options = options || {}
-  var fs = options.fs || _fs
-
-  var str = stringify(obj, options)
+  const str = stringify(obj, options)
   // not sure if fs.writeFileSync returns anything, but just in case
   return fs.writeFileSync(file, str, options)
+}
+
+const jsonfile = {
+  readFile,
+  readFileSync,
+  writeFile,
+  writeFileSync
+}
+
+module.exports = jsonfile
+
+
+/***/ }),
+
+/***/ 5902:
+/***/ ((module) => {
+
+function stringify (obj, { EOL = '\n', finalEOL = true, replacer = null, spaces } = {}) {
+  const EOF = finalEOL ? EOL : ''
+  const str = JSON.stringify(obj, replacer, spaces)
+
+  return str.replace(/\n/g, EOL) + EOF
 }
 
 function stripBom (content) {
   // we do this because JSON.parse would convert it to a utf8 string if encoding wasn't specified
   if (Buffer.isBuffer(content)) content = content.toString('utf8')
-  content = content.replace(/^\uFEFF/, '')
-  return content
+  return content.replace(/^\uFEFF/, '')
 }
 
-var jsonfile = {
-  readFile: readFile,
-  readFileSync: readFileSync,
-  writeFile: writeFile,
-  writeFileSync: writeFileSync
-}
-
-module.exports = jsonfile
+module.exports = { stringify, stripBom }
 
 
 /***/ }),
@@ -58612,78 +58622,6 @@ rimraf.sync = rimrafSync
 
 /***/ }),
 
-/***/ 1867:
-/***/ ((module, exports, __webpack_require__) => {
-
-/*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */
-/* eslint-disable node/no-deprecated-api */
-var buffer = __webpack_require__(4293)
-var Buffer = buffer.Buffer
-
-// alternative to using Object.keys for old browsers
-function copyProps (src, dst) {
-  for (var key in src) {
-    dst[key] = src[key]
-  }
-}
-if (Buffer.from && Buffer.alloc && Buffer.allocUnsafe && Buffer.allocUnsafeSlow) {
-  module.exports = buffer
-} else {
-  // Copy properties from require('buffer')
-  copyProps(buffer, exports)
-  exports.Buffer = SafeBuffer
-}
-
-function SafeBuffer (arg, encodingOrOffset, length) {
-  return Buffer(arg, encodingOrOffset, length)
-}
-
-SafeBuffer.prototype = Object.create(Buffer.prototype)
-
-// Copy static methods from Buffer
-copyProps(Buffer, SafeBuffer)
-
-SafeBuffer.from = function (arg, encodingOrOffset, length) {
-  if (typeof arg === 'number') {
-    throw new TypeError('Argument must not be a number')
-  }
-  return Buffer(arg, encodingOrOffset, length)
-}
-
-SafeBuffer.alloc = function (size, fill, encoding) {
-  if (typeof size !== 'number') {
-    throw new TypeError('Argument must be a number')
-  }
-  var buf = Buffer(size)
-  if (fill !== undefined) {
-    if (typeof encoding === 'string') {
-      buf.fill(fill, encoding)
-    } else {
-      buf.fill(fill)
-    }
-  } else {
-    buf.fill(0)
-  }
-  return buf
-}
-
-SafeBuffer.allocUnsafe = function (size) {
-  if (typeof size !== 'number') {
-    throw new TypeError('Argument must be a number')
-  }
-  return Buffer(size)
-}
-
-SafeBuffer.allocUnsafeSlow = function (size) {
-  if (typeof size !== 'number') {
-    throw new TypeError('Argument must be a number')
-  }
-  return buffer.SlowBuffer(size)
-}
-
-
-/***/ }),
-
 /***/ 5118:
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
@@ -79000,7 +78938,7 @@ module.exports = copy
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(1722)/* .fromCallback */ .E
 module.exports = {
   copy: u(__webpack_require__(2054))
 }
@@ -79014,7 +78952,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(1722)/* .fromCallback */ .E
 const fs = __webpack_require__(5747)
 const path = __webpack_require__(5622)
 const mkdir = __webpack_require__(2439)
@@ -79070,7 +79008,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(1722)/* .fromCallback */ .E
 const path = __webpack_require__(5622)
 const fs = __webpack_require__(7758)
 const mkdir = __webpack_require__(2439)
@@ -79158,7 +79096,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(1722)/* .fromCallback */ .E
 const path = __webpack_require__(5622)
 const fs = __webpack_require__(7758)
 const mkdir = __webpack_require__(2439)
@@ -79373,7 +79311,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(1722)/* .fromCallback */ .E
 const path = __webpack_require__(5622)
 const fs = __webpack_require__(7758)
 const _mkdirs = __webpack_require__(2439)
@@ -79445,7 +79383,7 @@ module.exports = {
 
 // This is adapted from https://github.com/normalize/mz
 // Copyright (c) 2014-2016 Jonathan Ong me@jongleberry.com and Contributors
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(1722)/* .fromCallback */ .E
 const fs = __webpack_require__(7758)
 
 const api = [
@@ -79592,7 +79530,7 @@ if (Object.getOwnPropertyDescriptor(fs, 'promises')) {
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(1722)/* .fromCallback */ .E
 const jsonFile = __webpack_require__(6119)
 
 jsonFile.outputJson = u(__webpack_require__(8177))
@@ -79616,8 +79554,8 @@ module.exports = jsonFile
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
-const jsonFile = __webpack_require__(6160)
+const u = __webpack_require__(1722)/* .fromCallback */ .E
+const jsonFile = __webpack_require__(4605)
 
 module.exports = {
   // jsonfile exports
@@ -79696,7 +79634,7 @@ module.exports = outputJson
 
 "use strict";
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(1722)/* .fromCallback */ .E
 const mkdirs = u(__webpack_require__(5532))
 const mkdirsSync = __webpack_require__(9525)
 
@@ -80010,7 +79948,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(1722)/* .fromCallback */ .E
 const fs = __webpack_require__(7758)
 const path = __webpack_require__(5622)
 const copy = __webpack_require__(1174).copy
@@ -80100,7 +80038,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(1722)/* .fromCallback */ .E
 const fs = __webpack_require__(7758)
 const path = __webpack_require__(5622)
 const mkdir = __webpack_require__(2439)
@@ -80147,7 +80085,7 @@ module.exports = {
 
 "use strict";
 
-const u = __webpack_require__(9046)/* .fromPromise */ .p
+const u = __webpack_require__(1722)/* .fromPromise */ .p
 const fs = __webpack_require__(7031)
 
 function pathExists (path) {
@@ -80168,7 +80106,7 @@ module.exports = {
 "use strict";
 
 
-const u = __webpack_require__(9046)/* .fromCallback */ .E
+const u = __webpack_require__(1722)/* .fromCallback */ .E
 const rimraf = __webpack_require__(1750)
 
 module.exports = {
@@ -80608,6 +80546,180 @@ module.exports = {
 
 /***/ }),
 
+/***/ 4605:
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var _fs
+try {
+  _fs = __webpack_require__(7758)
+} catch (_) {
+  _fs = __webpack_require__(5747)
+}
+
+function readFile (file, options, callback) {
+  if (callback == null) {
+    callback = options
+    options = {}
+  }
+
+  if (typeof options === 'string') {
+    options = {encoding: options}
+  }
+
+  options = options || {}
+  var fs = options.fs || _fs
+
+  var shouldThrow = true
+  if ('throws' in options) {
+    shouldThrow = options.throws
+  }
+
+  fs.readFile(file, options, function (err, data) {
+    if (err) return callback(err)
+
+    data = stripBom(data)
+
+    var obj
+    try {
+      obj = JSON.parse(data, options ? options.reviver : null)
+    } catch (err2) {
+      if (shouldThrow) {
+        err2.message = file + ': ' + err2.message
+        return callback(err2)
+      } else {
+        return callback(null, null)
+      }
+    }
+
+    callback(null, obj)
+  })
+}
+
+function readFileSync (file, options) {
+  options = options || {}
+  if (typeof options === 'string') {
+    options = {encoding: options}
+  }
+
+  var fs = options.fs || _fs
+
+  var shouldThrow = true
+  if ('throws' in options) {
+    shouldThrow = options.throws
+  }
+
+  try {
+    var content = fs.readFileSync(file, options)
+    content = stripBom(content)
+    return JSON.parse(content, options.reviver)
+  } catch (err) {
+    if (shouldThrow) {
+      err.message = file + ': ' + err.message
+      throw err
+    } else {
+      return null
+    }
+  }
+}
+
+function stringify (obj, options) {
+  var spaces
+  var EOL = '\n'
+  if (typeof options === 'object' && options !== null) {
+    if (options.spaces) {
+      spaces = options.spaces
+    }
+    if (options.EOL) {
+      EOL = options.EOL
+    }
+  }
+
+  var str = JSON.stringify(obj, options ? options.replacer : null, spaces)
+
+  return str.replace(/\n/g, EOL) + EOL
+}
+
+function writeFile (file, obj, options, callback) {
+  if (callback == null) {
+    callback = options
+    options = {}
+  }
+  options = options || {}
+  var fs = options.fs || _fs
+
+  var str = ''
+  try {
+    str = stringify(obj, options)
+  } catch (err) {
+    // Need to return whether a callback was passed or not
+    if (callback) callback(err, null)
+    return
+  }
+
+  fs.writeFile(file, str, options, callback)
+}
+
+function writeFileSync (file, obj, options) {
+  options = options || {}
+  var fs = options.fs || _fs
+
+  var str = stringify(obj, options)
+  // not sure if fs.writeFileSync returns anything, but just in case
+  return fs.writeFileSync(file, str, options)
+}
+
+function stripBom (content) {
+  // we do this because JSON.parse would convert it to a utf8 string if encoding wasn't specified
+  if (Buffer.isBuffer(content)) content = content.toString('utf8')
+  content = content.replace(/^\uFEFF/, '')
+  return content
+}
+
+var jsonfile = {
+  readFile: readFile,
+  readFileSync: readFileSync,
+  writeFile: writeFile,
+  writeFileSync: writeFileSync
+}
+
+module.exports = jsonfile
+
+
+/***/ }),
+
+/***/ 1722:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+
+exports.E = function (fn) {
+  return Object.defineProperty(function () {
+    if (typeof arguments[arguments.length - 1] === 'function') fn.apply(this, arguments)
+    else {
+      return new Promise((resolve, reject) => {
+        arguments[arguments.length] = (err, res) => {
+          if (err) return reject(err)
+          resolve(res)
+        }
+        arguments.length++
+        fn.apply(this, arguments)
+      })
+    }
+  }, 'name', { value: fn.name })
+}
+
+exports.p = function (fn) {
+  return Object.defineProperty(function () {
+    const cb = arguments[arguments.length - 1]
+    if (typeof cb !== 'function') return fn.apply(this, arguments)
+    else fn.apply(this, arguments).then(r => cb(null, r), cb)
+  }, 'name', { value: fn.name })
+}
+
+
+/***/ }),
+
 /***/ 4841:
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -80637,7 +80749,7 @@ module.exports = {
 
 /*<replacement>*/
 
-var Buffer = __webpack_require__(1867).Buffer;
+var Buffer = __webpack_require__(2279).Buffer;
 /*</replacement>*/
 
 var isEncoding = Buffer.isEncoding || function (encoding) {
@@ -80911,38 +81023,101 @@ function simpleEnd(buf) {
 
 /***/ }),
 
+/***/ 2279:
+/***/ ((module, exports, __webpack_require__) => {
+
+/*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */
+/* eslint-disable node/no-deprecated-api */
+var buffer = __webpack_require__(4293)
+var Buffer = buffer.Buffer
+
+// alternative to using Object.keys for old browsers
+function copyProps (src, dst) {
+  for (var key in src) {
+    dst[key] = src[key]
+  }
+}
+if (Buffer.from && Buffer.alloc && Buffer.allocUnsafe && Buffer.allocUnsafeSlow) {
+  module.exports = buffer
+} else {
+  // Copy properties from require('buffer')
+  copyProps(buffer, exports)
+  exports.Buffer = SafeBuffer
+}
+
+function SafeBuffer (arg, encodingOrOffset, length) {
+  return Buffer(arg, encodingOrOffset, length)
+}
+
+SafeBuffer.prototype = Object.create(Buffer.prototype)
+
+// Copy static methods from Buffer
+copyProps(Buffer, SafeBuffer)
+
+SafeBuffer.from = function (arg, encodingOrOffset, length) {
+  if (typeof arg === 'number') {
+    throw new TypeError('Argument must not be a number')
+  }
+  return Buffer(arg, encodingOrOffset, length)
+}
+
+SafeBuffer.alloc = function (size, fill, encoding) {
+  if (typeof size !== 'number') {
+    throw new TypeError('Argument must be a number')
+  }
+  var buf = Buffer(size)
+  if (fill !== undefined) {
+    if (typeof encoding === 'string') {
+      buf.fill(fill, encoding)
+    } else {
+      buf.fill(fill)
+    }
+  } else {
+    buf.fill(0)
+  }
+  return buf
+}
+
+SafeBuffer.allocUnsafe = function (size) {
+  if (typeof size !== 'number') {
+    throw new TypeError('Argument must be a number')
+  }
+  return Buffer(size)
+}
+
+SafeBuffer.allocUnsafeSlow = function (size) {
+  if (typeof size !== 'number') {
+    throw new TypeError('Argument must be a number')
+  }
+  return buffer.SlowBuffer(size)
+}
+
+
+/***/ }),
+
 /***/ 9318:
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
 
 const os = __webpack_require__(2087);
-const tty = __webpack_require__(3867);
 const hasFlag = __webpack_require__(1621);
 
-const {env} = process;
+const env = process.env;
 
 let forceColor;
 if (hasFlag('no-color') ||
 	hasFlag('no-colors') ||
-	hasFlag('color=false') ||
-	hasFlag('color=never')) {
-	forceColor = 0;
+	hasFlag('color=false')) {
+	forceColor = false;
 } else if (hasFlag('color') ||
 	hasFlag('colors') ||
 	hasFlag('color=true') ||
 	hasFlag('color=always')) {
-	forceColor = 1;
+	forceColor = true;
 }
-
 if ('FORCE_COLOR' in env) {
-	if (env.FORCE_COLOR === 'true') {
-		forceColor = 1;
-	} else if (env.FORCE_COLOR === 'false') {
-		forceColor = 0;
-	} else {
-		forceColor = env.FORCE_COLOR.length === 0 ? 1 : Math.min(parseInt(env.FORCE_COLOR, 10), 3);
-	}
+	forceColor = env.FORCE_COLOR.length === 0 || parseInt(env.FORCE_COLOR, 10) !== 0;
 }
 
 function translateLevel(level) {
@@ -80958,8 +81133,8 @@ function translateLevel(level) {
 	};
 }
 
-function supportsColor(haveStream, streamIsTTY) {
-	if (forceColor === 0) {
+function supportsColor(stream) {
+	if (forceColor === false) {
 		return 0;
 	}
 
@@ -80973,21 +81148,22 @@ function supportsColor(haveStream, streamIsTTY) {
 		return 2;
 	}
 
-	if (haveStream && !streamIsTTY && forceColor === undefined) {
+	if (stream && !stream.isTTY && forceColor !== true) {
 		return 0;
 	}
 
-	const min = forceColor || 0;
-
-	if (env.TERM === 'dumb') {
-		return min;
-	}
+	const min = forceColor ? 1 : 0;
 
 	if (process.platform === 'win32') {
-		// Windows 10 build 10586 is the first Windows release that supports 256 colors.
-		// Windows 10 build 14931 is the first release that supports 16m/TrueColor.
+		// Node.js 7.5.0 is the first version of Node.js to include a patch to
+		// libuv that enables 256 color output on Windows. Anything earlier and it
+		// won't work. However, here we target Node.js 8 at minimum as it is an LTS
+		// release, and Node.js 7 is not. Windows 10 build 10586 is the first Windows
+		// release that supports 256 colors. Windows 10 build 14931 is the first release
+		// that supports 16m/TrueColor.
 		const osRelease = os.release().split('.');
 		if (
+			Number(process.versions.node.split('.')[0]) >= 8 &&
 			Number(osRelease[0]) >= 10 &&
 			Number(osRelease[2]) >= 10586
 		) {
@@ -80998,7 +81174,7 @@ function supportsColor(haveStream, streamIsTTY) {
 	}
 
 	if ('CI' in env) {
-		if (['TRAVIS', 'CIRCLECI', 'APPVEYOR', 'GITLAB_CI', 'GITHUB_ACTIONS', 'BUILDKITE'].some(sign => sign in env) || env.CI_NAME === 'codeship') {
+		if (['TRAVIS', 'CIRCLECI', 'APPVEYOR', 'GITLAB_CI'].some(sign => sign in env) || env.CI_NAME === 'codeship') {
 			return 1;
 		}
 
@@ -81037,18 +81213,22 @@ function supportsColor(haveStream, streamIsTTY) {
 		return 1;
 	}
 
+	if (env.TERM === 'dumb') {
+		return min;
+	}
+
 	return min;
 }
 
 function getSupportLevel(stream) {
-	const level = supportsColor(stream, stream && stream.isTTY);
+	const level = supportsColor(stream);
 	return translateLevel(level);
 }
 
 module.exports = {
 	supportsColor: getSupportLevel,
-	stdout: translateLevel(supportsColor(true, tty.isatty(1))),
-	stderr: translateLevel(supportsColor(true, tty.isatty(2)))
+	stdout: getSupportLevel(process.stdout),
+	stderr: getSupportLevel(process.stderr)
 };
 
 
@@ -84671,27 +84851,26 @@ nacl.setPRNG = function(fn) {
 "use strict";
 
 
-exports.E = function (fn) {
-  return Object.defineProperty(function () {
-    if (typeof arguments[arguments.length - 1] === 'function') fn.apply(this, arguments)
+exports.fromCallback = function (fn) {
+  return Object.defineProperty(function (...args) {
+    if (typeof args[args.length - 1] === 'function') fn.apply(this, args)
     else {
       return new Promise((resolve, reject) => {
-        arguments[arguments.length] = (err, res) => {
-          if (err) return reject(err)
-          resolve(res)
-        }
-        arguments.length++
-        fn.apply(this, arguments)
+        fn.call(
+          this,
+          ...args,
+          (err, res) => (err != null) ? reject(err) : resolve(res)
+        )
       })
     }
   }, 'name', { value: fn.name })
 }
 
-exports.p = function (fn) {
-  return Object.defineProperty(function () {
-    const cb = arguments[arguments.length - 1]
-    if (typeof cb !== 'function') return fn.apply(this, arguments)
-    else fn.apply(this, arguments).then(r => cb(null, r), cb)
+exports.fromPromise = function (fn) {
+  return Object.defineProperty(function (...args) {
+    const cb = args[args.length - 1]
+    if (typeof cb !== 'function') return fn.apply(this, args)
+    else fn.apply(this, args.slice(0, -1)).then(r => cb(null, r), cb)
   }, 'name', { value: fn.name })
 }
 
@@ -85076,17 +85255,8 @@ function version(uuid) {
 /***/ }),
 
 /***/ 933:
-/***/ (function(module, exports) {
+/***/ ((module, exports) => {
 
-var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
-    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-        if (ar || !(i in from)) {
-            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-            ar[i] = from[i];
-        }
-    }
-    return to.concat(ar || Array.prototype.slice.call(from));
-};
 (function (factory) {
     if ( true && typeof module.exports === "object") {
         var v = factory(require, exports);
@@ -85095,82 +85265,69 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
     else if (typeof define === "function" && define.amd) {
         define(["require", "exports"], factory);
     }
-})(function (require, exports) {
+})(function () {
     /* --------------------------------------------------------------------------------------------
      * Copyright (c) Microsoft Corporation. All rights reserved.
      * Licensed under the MIT License. See License.txt in the project root for license information.
      * ------------------------------------------------------------------------------------------ */
     'use strict';
-    Object.defineProperty(exports, "__esModule", { value: true });
+    Object.defineProperty(exports, "__esModule", ({ value: true }));
     exports.TextDocument = void 0;
-    var FullTextDocument = /** @class */ (function () {
-        function FullTextDocument(uri, languageId, version, content) {
+    class FullTextDocument {
+        constructor(uri, languageId, version, content) {
             this._uri = uri;
             this._languageId = languageId;
             this._version = version;
             this._content = content;
             this._lineOffsets = undefined;
         }
-        Object.defineProperty(FullTextDocument.prototype, "uri", {
-            get: function () {
-                return this._uri;
-            },
-            enumerable: false,
-            configurable: true
-        });
-        Object.defineProperty(FullTextDocument.prototype, "languageId", {
-            get: function () {
-                return this._languageId;
-            },
-            enumerable: false,
-            configurable: true
-        });
-        Object.defineProperty(FullTextDocument.prototype, "version", {
-            get: function () {
-                return this._version;
-            },
-            enumerable: false,
-            configurable: true
-        });
-        FullTextDocument.prototype.getText = function (range) {
+        get uri() {
+            return this._uri;
+        }
+        get languageId() {
+            return this._languageId;
+        }
+        get version() {
+            return this._version;
+        }
+        getText(range) {
             if (range) {
-                var start = this.offsetAt(range.start);
-                var end = this.offsetAt(range.end);
+                const start = this.offsetAt(range.start);
+                const end = this.offsetAt(range.end);
                 return this._content.substring(start, end);
             }
             return this._content;
-        };
-        FullTextDocument.prototype.update = function (changes, version) {
-            for (var _i = 0, changes_1 = changes; _i < changes_1.length; _i++) {
-                var change = changes_1[_i];
+        }
+        update(changes, version) {
+            for (let change of changes) {
                 if (FullTextDocument.isIncremental(change)) {
                     // makes sure start is before end
-                    var range = getWellformedRange(change.range);
+                    const range = getWellformedRange(change.range);
                     // update content
-                    var startOffset = this.offsetAt(range.start);
-                    var endOffset = this.offsetAt(range.end);
+                    const startOffset = this.offsetAt(range.start);
+                    const endOffset = this.offsetAt(range.end);
                     this._content = this._content.substring(0, startOffset) + change.text + this._content.substring(endOffset, this._content.length);
                     // update the offsets
-                    var startLine = Math.max(range.start.line, 0);
-                    var endLine = Math.max(range.end.line, 0);
-                    var lineOffsets = this._lineOffsets;
-                    var addedLineOffsets = computeLineOffsets(change.text, false, startOffset);
+                    const startLine = Math.max(range.start.line, 0);
+                    const endLine = Math.max(range.end.line, 0);
+                    let lineOffsets = this._lineOffsets;
+                    const addedLineOffsets = computeLineOffsets(change.text, false, startOffset);
                     if (endLine - startLine === addedLineOffsets.length) {
-                        for (var i = 0, len = addedLineOffsets.length; i < len; i++) {
+                        for (let i = 0, len = addedLineOffsets.length; i < len; i++) {
                             lineOffsets[i + startLine + 1] = addedLineOffsets[i];
                         }
                     }
                     else {
                         if (addedLineOffsets.length < 10000) {
-                            lineOffsets.splice.apply(lineOffsets, __spreadArray([startLine + 1, endLine - startLine], addedLineOffsets, false));
+                            lineOffsets.splice(startLine + 1, endLine - startLine, ...addedLineOffsets);
                         }
                         else { // avoid too many arguments for splice
                             this._lineOffsets = lineOffsets = lineOffsets.slice(0, startLine + 1).concat(addedLineOffsets, lineOffsets.slice(endLine + 1));
                         }
                     }
-                    var diff = change.text.length - (endOffset - startOffset);
+                    const diff = change.text.length - (endOffset - startOffset);
                     if (diff !== 0) {
-                        for (var i = startLine + 1 + addedLineOffsets.length, len = lineOffsets.length; i < len; i++) {
+                        for (let i = startLine + 1 + addedLineOffsets.length, len = lineOffsets.length; i < len; i++) {
                             lineOffsets[i] = lineOffsets[i] + diff;
                         }
                     }
@@ -85184,22 +85341,22 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
                 }
             }
             this._version = version;
-        };
-        FullTextDocument.prototype.getLineOffsets = function () {
+        }
+        getLineOffsets() {
             if (this._lineOffsets === undefined) {
                 this._lineOffsets = computeLineOffsets(this._content, true);
             }
             return this._lineOffsets;
-        };
-        FullTextDocument.prototype.positionAt = function (offset) {
+        }
+        positionAt(offset) {
             offset = Math.max(Math.min(offset, this._content.length), 0);
-            var lineOffsets = this.getLineOffsets();
-            var low = 0, high = lineOffsets.length;
+            let lineOffsets = this.getLineOffsets();
+            let low = 0, high = lineOffsets.length;
             if (high === 0) {
                 return { line: 0, character: offset };
             }
             while (low < high) {
-                var mid = Math.floor((low + high) / 2);
+                let mid = Math.floor((low + high) / 2);
                 if (lineOffsets[mid] > offset) {
                     high = mid;
                 }
@@ -85209,41 +85366,36 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
             }
             // low is the least x for which the line offset is larger than the current offset
             // or array.length if no line offset is larger than the current offset
-            var line = low - 1;
-            return { line: line, character: offset - lineOffsets[line] };
-        };
-        FullTextDocument.prototype.offsetAt = function (position) {
-            var lineOffsets = this.getLineOffsets();
+            let line = low - 1;
+            return { line, character: offset - lineOffsets[line] };
+        }
+        offsetAt(position) {
+            let lineOffsets = this.getLineOffsets();
             if (position.line >= lineOffsets.length) {
                 return this._content.length;
             }
             else if (position.line < 0) {
                 return 0;
             }
-            var lineOffset = lineOffsets[position.line];
-            var nextLineOffset = (position.line + 1 < lineOffsets.length) ? lineOffsets[position.line + 1] : this._content.length;
+            let lineOffset = lineOffsets[position.line];
+            let nextLineOffset = (position.line + 1 < lineOffsets.length) ? lineOffsets[position.line + 1] : this._content.length;
             return Math.max(Math.min(lineOffset + position.character, nextLineOffset), lineOffset);
-        };
-        Object.defineProperty(FullTextDocument.prototype, "lineCount", {
-            get: function () {
-                return this.getLineOffsets().length;
-            },
-            enumerable: false,
-            configurable: true
-        });
-        FullTextDocument.isIncremental = function (event) {
-            var candidate = event;
+        }
+        get lineCount() {
+            return this.getLineOffsets().length;
+        }
+        static isIncremental(event) {
+            let candidate = event;
             return candidate !== undefined && candidate !== null &&
                 typeof candidate.text === 'string' && candidate.range !== undefined &&
                 (candidate.rangeLength === undefined || typeof candidate.rangeLength === 'number');
-        };
-        FullTextDocument.isFull = function (event) {
-            var candidate = event;
+        }
+        static isFull(event) {
+            let candidate = event;
             return candidate !== undefined && candidate !== null &&
                 typeof candidate.text === 'string' && candidate.range === undefined && candidate.rangeLength === undefined;
-        };
-        return FullTextDocument;
-    }());
+        }
+    }
     var TextDocument;
     (function (TextDocument) {
         /**
@@ -85278,19 +85430,18 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
         }
         TextDocument.update = update;
         function applyEdits(document, edits) {
-            var text = document.getText();
-            var sortedEdits = mergeSort(edits.map(getWellformedEdit), function (a, b) {
-                var diff = a.range.start.line - b.range.start.line;
+            let text = document.getText();
+            let sortedEdits = mergeSort(edits.map(getWellformedEdit), (a, b) => {
+                let diff = a.range.start.line - b.range.start.line;
                 if (diff === 0) {
                     return a.range.start.character - b.range.start.character;
                 }
                 return diff;
             });
-            var lastModifiedOffset = 0;
-            var spans = [];
-            for (var _i = 0, sortedEdits_1 = sortedEdits; _i < sortedEdits_1.length; _i++) {
-                var e = sortedEdits_1[_i];
-                var startOffset = document.offsetAt(e.range.start);
+            let lastModifiedOffset = 0;
+            const spans = [];
+            for (const e of sortedEdits) {
+                let startOffset = document.offsetAt(e.range.start);
                 if (startOffset < lastModifiedOffset) {
                     throw new Error('Overlapping edit');
                 }
@@ -85312,16 +85463,16 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
             // sorted
             return data;
         }
-        var p = (data.length / 2) | 0;
-        var left = data.slice(0, p);
-        var right = data.slice(p);
+        const p = (data.length / 2) | 0;
+        const left = data.slice(0, p);
+        const right = data.slice(p);
         mergeSort(left, compare);
         mergeSort(right, compare);
-        var leftIdx = 0;
-        var rightIdx = 0;
-        var i = 0;
+        let leftIdx = 0;
+        let rightIdx = 0;
+        let i = 0;
         while (leftIdx < left.length && rightIdx < right.length) {
-            var ret = compare(left[leftIdx], right[rightIdx]);
+            let ret = compare(left[leftIdx], right[rightIdx]);
             if (ret <= 0) {
                 // smaller_equal -> take left to preserve order
                 data[i++] = left[leftIdx++];
@@ -85339,11 +85490,10 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
         }
         return data;
     }
-    function computeLineOffsets(text, isAtLineStart, textOffset) {
-        if (textOffset === void 0) { textOffset = 0; }
-        var result = isAtLineStart ? [textOffset] : [];
-        for (var i = 0; i < text.length; i++) {
-            var ch = text.charCodeAt(i);
+    function computeLineOffsets(text, isAtLineStart, textOffset = 0) {
+        const result = isAtLineStart ? [textOffset] : [];
+        for (let i = 0; i < text.length; i++) {
+            let ch = text.charCodeAt(i);
             if (ch === 13 /* CarriageReturn */ || ch === 10 /* LineFeed */) {
                 if (ch === 13 /* CarriageReturn */ && i + 1 < text.length && text.charCodeAt(i + 1) === 10 /* LineFeed */) {
                     i++;
@@ -85354,17 +85504,17 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
         return result;
     }
     function getWellformedRange(range) {
-        var start = range.start;
-        var end = range.end;
+        const start = range.start;
+        const end = range.end;
         if (start.line > end.line || (start.line === end.line && start.character > end.character)) {
             return { start: end, end: start };
         }
         return range;
     }
     function getWellformedEdit(textEdit) {
-        var range = getWellformedRange(textEdit.range);
+        const range = getWellformedRange(textEdit.range);
         if (range !== textEdit.range) {
-            return { newText: textEdit.newText, range: range };
+            return { newText: textEdit.newText, range };
         }
         return textEdit;
     }
@@ -85391,7 +85541,7 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
      * ------------------------------------------------------------------------------------------ */
     'use strict';
     Object.defineProperty(exports, "__esModule", ({ value: true }));
-    exports.TextDocument = exports.EOL = exports.SemanticTokens = exports.SemanticTokenModifiers = exports.SemanticTokenTypes = exports.SelectionRange = exports.DocumentLink = exports.FormattingOptions = exports.CodeLens = exports.CodeAction = exports.CodeActionContext = exports.CodeActionKind = exports.DocumentSymbol = exports.SymbolInformation = exports.SymbolTag = exports.SymbolKind = exports.DocumentHighlight = exports.DocumentHighlightKind = exports.SignatureInformation = exports.ParameterInformation = exports.Hover = exports.MarkedString = exports.CompletionList = exports.CompletionItem = exports.CompletionItemLabelDetails = exports.InsertTextMode = exports.InsertReplaceEdit = exports.CompletionItemTag = exports.InsertTextFormat = exports.CompletionItemKind = exports.MarkupContent = exports.MarkupKind = exports.TextDocumentItem = exports.OptionalVersionedTextDocumentIdentifier = exports.VersionedTextDocumentIdentifier = exports.TextDocumentIdentifier = exports.WorkspaceChange = exports.WorkspaceEdit = exports.DeleteFile = exports.RenameFile = exports.CreateFile = exports.TextDocumentEdit = exports.AnnotatedTextEdit = exports.ChangeAnnotationIdentifier = exports.ChangeAnnotation = exports.TextEdit = exports.Command = exports.Diagnostic = exports.CodeDescription = exports.DiagnosticTag = exports.DiagnosticSeverity = exports.DiagnosticRelatedInformation = exports.FoldingRange = exports.FoldingRangeKind = exports.ColorPresentation = exports.ColorInformation = exports.Color = exports.LocationLink = exports.Location = exports.Range = exports.Position = exports.uinteger = exports.integer = void 0;
+    exports.TextDocument = exports.EOL = exports.InlineValuesContext = exports.InlineValueEvaluatableExpression = exports.InlineValueVariableLookup = exports.InlineValueText = exports.SemanticTokens = exports.SemanticTokenModifiers = exports.SemanticTokenTypes = exports.SelectionRange = exports.DocumentLink = exports.FormattingOptions = exports.CodeLens = exports.CodeAction = exports.CodeActionContext = exports.CodeActionTriggerKind = exports.CodeActionKind = exports.DocumentSymbol = exports.WorkspaceSymbol = exports.SymbolInformation = exports.SymbolTag = exports.SymbolKind = exports.DocumentHighlight = exports.DocumentHighlightKind = exports.SignatureInformation = exports.ParameterInformation = exports.Hover = exports.MarkedString = exports.CompletionList = exports.CompletionItem = exports.CompletionItemLabelDetails = exports.InsertTextMode = exports.InsertReplaceEdit = exports.CompletionItemTag = exports.InsertTextFormat = exports.CompletionItemKind = exports.MarkupContent = exports.MarkupKind = exports.TextDocumentItem = exports.OptionalVersionedTextDocumentIdentifier = exports.VersionedTextDocumentIdentifier = exports.TextDocumentIdentifier = exports.WorkspaceChange = exports.WorkspaceEdit = exports.DeleteFile = exports.RenameFile = exports.CreateFile = exports.TextDocumentEdit = exports.AnnotatedTextEdit = exports.ChangeAnnotationIdentifier = exports.ChangeAnnotation = exports.TextEdit = exports.Command = exports.Diagnostic = exports.CodeDescription = exports.DiagnosticTag = exports.DiagnosticSeverity = exports.DiagnosticRelatedInformation = exports.FoldingRange = exports.FoldingRangeKind = exports.ColorPresentation = exports.ColorInformation = exports.Color = exports.LocationLink = exports.Location = exports.Range = exports.Position = exports.uinteger = exports.integer = void 0;
     var integer;
     (function (integer) {
         integer.MIN_VALUE = -2147483648;
@@ -85446,7 +85596,7 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
                 return { start: one, end: two };
             }
             else {
-                throw new Error("Range#create called with invalid arguments[" + one + ", " + two + ", " + three + ", " + four + "]");
+                throw new Error("Range#create called with invalid arguments[".concat(one, ", ").concat(two, ", ").concat(three, ", ").concat(four, "]"));
             }
         }
         Range.create = create;
@@ -85534,7 +85684,7 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
          */
         function is(value) {
             var candidate = value;
-            return Is.numberRange(candidate.red, 0, 1)
+            return Is.objectLiteral(candidate) && Is.numberRange(candidate.red, 0, 1)
                 && Is.numberRange(candidate.green, 0, 1)
                 && Is.numberRange(candidate.blue, 0, 1)
                 && Is.numberRange(candidate.alpha, 0, 1);
@@ -85562,7 +85712,7 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
          */
         function is(value) {
             var candidate = value;
-            return Range.is(candidate.range) && Color.is(candidate.color);
+            return Is.objectLiteral(candidate) && Range.is(candidate.range) && Color.is(candidate.color);
         }
         ColorInformation.is = is;
     })(ColorInformation = exports.ColorInformation || (exports.ColorInformation = {}));
@@ -85588,7 +85738,7 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
          */
         function is(value) {
             var candidate = value;
-            return Is.string(candidate.label)
+            return Is.objectLiteral(candidate) && Is.string(candidate.label)
                 && (Is.undefined(candidate.textEdit) || TextEdit.is(candidate))
                 && (Is.undefined(candidate.additionalTextEdits) || Is.typedArray(candidate.additionalTextEdits, TextEdit.is));
         }
@@ -85643,7 +85793,7 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
          */
         function is(value) {
             var candidate = value;
-            return Is.uinteger(candidate.startLine) && Is.uinteger(candidate.startLine)
+            return Is.objectLiteral(candidate) && Is.uinteger(candidate.startLine) && Is.uinteger(candidate.startLine)
                 && (Is.undefined(candidate.startCharacter) || Is.uinteger(candidate.startCharacter))
                 && (Is.undefined(candidate.endCharacter) || Is.uinteger(candidate.endCharacter))
                 && (Is.undefined(candidate.kind) || Is.string(candidate.kind));
@@ -85727,7 +85877,7 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
     (function (CodeDescription) {
         function is(value) {
             var candidate = value;
-            return candidate !== undefined && candidate !== null && Is.string(candidate.href);
+            return Is.objectLiteral(candidate) && Is.string(candidate.href);
         }
         CodeDescription.is = is;
     })(CodeDescription = exports.CodeDescription || (exports.CodeDescription = {}));
@@ -85859,7 +86009,7 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
         ChangeAnnotation.create = create;
         function is(value) {
             var candidate = value;
-            return candidate !== undefined && Is.objectLiteral(candidate) && Is.string(candidate.label) &&
+            return Is.objectLiteral(candidate) && Is.string(candidate.label) &&
                 (Is.boolean(candidate.needsConfirmation) || candidate.needsConfirmation === undefined) &&
                 (Is.string(candidate.description) || candidate.description === undefined);
         }
@@ -85869,7 +86019,7 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
     (function (ChangeAnnotationIdentifier) {
         function is(value) {
             var candidate = value;
-            return typeof candidate === 'string';
+            return Is.string(candidate);
         }
         ChangeAnnotationIdentifier.is = is;
     })(ChangeAnnotationIdentifier = exports.ChangeAnnotationIdentifier || (exports.ChangeAnnotationIdentifier = {}));
@@ -86131,10 +86281,10 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
                 annotation = idOrAnnotation;
             }
             if (this._annotations[id] !== undefined) {
-                throw new Error("Id " + id + " is already in use.");
+                throw new Error("Id ".concat(id, " is already in use."));
             }
             if (annotation === undefined) {
-                throw new Error("No annotation provided for id " + id);
+                throw new Error("No annotation provided for id ".concat(id));
             }
             this._annotations[id] = annotation;
             this._size++;
@@ -86781,7 +86931,7 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
          * @param name The name of the symbol.
          * @param kind The kind of the symbol.
          * @param range The range of the location of the symbol.
-         * @param uri The resource of the location of symbol, defaults to the current document.
+         * @param uri The resource of the location of symbol.
          * @param containerName The name of the symbol containing the symbol.
          */
         function create(name, kind, range, uri, containerName) {
@@ -86797,6 +86947,24 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
         }
         SymbolInformation.create = create;
     })(SymbolInformation = exports.SymbolInformation || (exports.SymbolInformation = {}));
+    var WorkspaceSymbol;
+    (function (WorkspaceSymbol) {
+        /**
+         * Create a new workspace symbol.
+         *
+         * @param name The name of the symbol.
+         * @param kind The kind of the symbol.
+         * @param uri The resource of the location of the symbol.
+         * @param range An options range of the location.
+         * @returns A WorkspaceSymbol.
+         */
+        function create(name, kind, uri, range) {
+            return range !== undefined
+                ? { name: name, kind: kind, location: { uri: uri, range: range } }
+                : { name: name, kind: kind, location: { uri: uri } };
+        }
+        WorkspaceSymbol.create = create;
+    })(WorkspaceSymbol = exports.WorkspaceSymbol || (exports.WorkspaceSymbol = {}));
     var DocumentSymbol;
     (function (DocumentSymbol) {
         /**
@@ -86912,6 +87080,25 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
         CodeActionKind.SourceFixAll = 'source.fixAll';
     })(CodeActionKind = exports.CodeActionKind || (exports.CodeActionKind = {}));
     /**
+     * The reason why code actions were requested.
+     *
+     * @since 3.17.0 - proposed state
+     */
+    var CodeActionTriggerKind;
+    (function (CodeActionTriggerKind) {
+        /**
+         * Code actions were explicitly requested by the user or by an extension.
+         */
+        CodeActionTriggerKind.Invoked = 1;
+        /**
+         * Code actions were requested automatically.
+         *
+         * This typically happens when current selection in a file changes, but can
+         * also be triggered when file content changes.
+         */
+        CodeActionTriggerKind.Automatic = 2;
+    })(CodeActionTriggerKind = exports.CodeActionTriggerKind || (exports.CodeActionTriggerKind = {}));
+    /**
      * The CodeActionContext namespace provides helper functions to work with
      * [CodeActionContext](#CodeActionContext) literals.
      */
@@ -86920,10 +87107,13 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
         /**
          * Creates a new CodeActionContext literal.
          */
-        function create(diagnostics, only) {
+        function create(diagnostics, only, triggerKind) {
             var result = { diagnostics: diagnostics };
             if (only !== undefined && only !== null) {
                 result.only = only;
+            }
+            if (triggerKind !== undefined && triggerKind !== null) {
+                result.triggerKind = triggerKind;
             }
             return result;
         }
@@ -86933,7 +87123,9 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
          */
         function is(value) {
             var candidate = value;
-            return Is.defined(candidate) && Is.typedArray(candidate.diagnostics, Diagnostic.is) && (candidate.only === undefined || Is.typedArray(candidate.only, Is.string));
+            return Is.defined(candidate) && Is.typedArray(candidate.diagnostics, Diagnostic.is)
+                && (candidate.only === undefined || Is.typedArray(candidate.only, Is.string))
+                && (candidate.triggerKind === undefined || candidate.triggerKind === CodeActionTriggerKind.Invoked || candidate.triggerKind === CodeActionTriggerKind.Automatic);
         }
         CodeActionContext.is = is;
     })(CodeActionContext = exports.CodeActionContext || (exports.CodeActionContext = {}));
@@ -87057,7 +87249,7 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
         SelectionRange.create = create;
         function is(value) {
             var candidate = value;
-            return candidate !== undefined && Range.is(candidate.range) && (candidate.parent === undefined || SelectionRange.is(candidate.parent));
+            return Is.objectLiteral(candidate) && Range.is(candidate.range) && (candidate.parent === undefined || SelectionRange.is(candidate.parent));
         }
         SelectionRange.is = is;
     })(SelectionRange = exports.SelectionRange || (exports.SelectionRange = {}));
@@ -87096,6 +87288,10 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
         SemanticTokenTypes["number"] = "number";
         SemanticTokenTypes["regexp"] = "regexp";
         SemanticTokenTypes["operator"] = "operator";
+        /**
+         * @since 3.17.0
+         */
+        SemanticTokenTypes["decorator"] = "decorator";
     })(SemanticTokenTypes = exports.SemanticTokenTypes || (exports.SemanticTokenTypes = {}));
     /**
      * A set of predefined token modifiers. This set is not fixed
@@ -87124,11 +87320,97 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
     (function (SemanticTokens) {
         function is(value) {
             var candidate = value;
-            return candidate !== undefined && (candidate.resultId === undefined || typeof candidate.resultId === 'string') &&
+            return Is.objectLiteral(candidate) && (candidate.resultId === undefined || typeof candidate.resultId === 'string') &&
                 Array.isArray(candidate.data) && (candidate.data.length === 0 || typeof candidate.data[0] === 'number');
         }
         SemanticTokens.is = is;
     })(SemanticTokens = exports.SemanticTokens || (exports.SemanticTokens = {}));
+    /**
+     * The InlineValueText namespace provides functions to deal with InlineValueTexts.
+     *
+     * @since 3.17.0 - proposed state
+     */
+    var InlineValueText;
+    (function (InlineValueText) {
+        /**
+         * Creates a new InlineValueText literal.
+         */
+        function create(range, text) {
+            return { range: range, text: text };
+        }
+        InlineValueText.create = create;
+        function is(value) {
+            var candidate = value;
+            return candidate !== undefined && candidate !== null && Range.is(candidate.range) && Is.string(candidate.text);
+        }
+        InlineValueText.is = is;
+    })(InlineValueText = exports.InlineValueText || (exports.InlineValueText = {}));
+    /**
+     * The InlineValueVariableLookup namespace provides functions to deal with InlineValueVariableLookups.
+     *
+     * @since 3.17.0
+     */
+    var InlineValueVariableLookup;
+    (function (InlineValueVariableLookup) {
+        /**
+         * Creates a new InlineValueText literal.
+         */
+        function create(range, variableName, caseSensitiveLookup) {
+            return { range: range, variableName: variableName, caseSensitiveLookup: caseSensitiveLookup };
+        }
+        InlineValueVariableLookup.create = create;
+        function is(value) {
+            var candidate = value;
+            return candidate !== undefined && candidate !== null && Range.is(candidate.range) && Is.boolean(candidate.caseSensitiveLookup)
+                && (Is.string(candidate.variableName) || candidate.variableName === undefined);
+        }
+        InlineValueVariableLookup.is = is;
+    })(InlineValueVariableLookup = exports.InlineValueVariableLookup || (exports.InlineValueVariableLookup = {}));
+    /**
+     * The InlineValueEvaluatableExpression namespace provides functions to deal with InlineValueEvaluatableExpression.
+     *
+     * @since 3.17.0 - proposed state
+     */
+    var InlineValueEvaluatableExpression;
+    (function (InlineValueEvaluatableExpression) {
+        /**
+         * Creates a new InlineValueEvaluatableExpression literal.
+         */
+        function create(range, expression) {
+            return { range: range, expression: expression };
+        }
+        InlineValueEvaluatableExpression.create = create;
+        function is(value) {
+            var candidate = value;
+            return candidate !== undefined && candidate !== null && Range.is(candidate.range)
+                && (Is.string(candidate.expression) || candidate.expression === undefined);
+        }
+        InlineValueEvaluatableExpression.is = is;
+    })(InlineValueEvaluatableExpression = exports.InlineValueEvaluatableExpression || (exports.InlineValueEvaluatableExpression = {}));
+    /**
+     * The InlineValuesContext namespace provides helper functions to work with
+     * [InlineValuesContext](#InlineValuesContext) literals.
+     *
+     * @since 3.17.0 - proposed state
+     */
+    var InlineValuesContext;
+    (function (InlineValuesContext) {
+        /**
+         * Creates a new InlineValuesContext literal.
+         */
+        function create(stoppedLocation) {
+            return { stoppedLocation: stoppedLocation };
+        }
+        InlineValuesContext.create = create;
+        /**
+         * Checks whether the given literal conforms to the [InlineValuesContext](#InlineValuesContext) interface.
+         */
+        function is(value) {
+            var candidate = value;
+            return Is.defined(candidate) && Range.is(value.stoppedLocation);
+        }
+        InlineValuesContext.is = is;
+    })(InlineValuesContext = exports.InlineValuesContext || (exports.InlineValuesContext = {}));
     exports.EOL = ['\n', '\r\n', '\r'];
     /**
      * @deprecated Use the text document from the new vscode-languageserver-textdocument package.
@@ -88202,7 +88484,7 @@ var Builder = /** @class */ (function () {
     Builder.prototype.initBuildArtifactDir = function (_a) {
         var baseDir = _a.baseDir, serviceName = _a.serviceName, functionName = _a.functionName;
         return __awaiter(this, void 0, void 0, function () {
-            var artifactPath;
+            var artifactPath, buildFilesListJSONPath, _ex_1;
             var _this = this;
             return __generator(this, function (_b) {
                 switch (_b.label) {
@@ -88229,7 +88511,19 @@ var Builder = /** @class */ (function () {
                         this.logger.debug("[" + this.projectName + "] Create build folder.");
                         fs_extra_1.default.mkdirpSync(artifactPath);
                         this.logger.debug("[" + this.projectName + "] Created build folder successfully.");
-                        return [2 /*return*/, artifactPath];
+                        _b.label = 3;
+                    case 3:
+                        _b.trys.push([3, 5, , 6]);
+                        buildFilesListJSONPath = utils_1.getBuildFilesListJSONPath(baseDir, serviceName, functionName);
+                        this.logger.debug("[" + this.projectName + "] Build link save url: " + buildFilesListJSONPath + ".");
+                        return [4 /*yield*/, fs_extra_1.default.remove(buildFilesListJSONPath)];
+                    case 4:
+                        _b.sent();
+                        return [3 /*break*/, 6];
+                    case 5:
+                        _ex_1 = _b.sent();
+                        return [3 /*break*/, 6];
+                    case 6: return [2 /*return*/, artifactPath];
                 }
             });
         });
@@ -88244,7 +88538,7 @@ var Builder = /** @class */ (function () {
     return Builder;
 }());
 exports.default = Builder;
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiYnVpbGRlci5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbImZpbGU6Ly8vVXNlcnMvd2I0NDcxODgvRGVza3RvcC9uZXctcmVwby9mYy1idWlsZC9zcmMvdXRpbHMvYnVpbGRlci50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7OztBQUFBLDhDQUF3RTtBQUN4RSxzREFBMEI7QUFDMUIsOENBQXdCO0FBQ3hCLGtEQUE0QjtBQUM1QixrREFBdUI7QUFDdkIsc0VBQStDO0FBQy9DLCtDQUF5QztBQUN6QyxpQ0FBbUc7QUFDbkcsMkNBQStEO0FBQy9ELG1DQUF5RDtBQUN6RCx1Q0FBcUM7QUFFckMsK0NBQXVFO0FBQ3ZFLHVDQUEyRDtBQWEzRDtJQWFFLGlCQUFZLFdBQW1CLEVBQUUsU0FBa0IsRUFBRSxVQUFrQixFQUFFLFVBQWtCLEVBQUUsV0FBb0I7UUFDL0csSUFBSSxDQUFDLFdBQVcsR0FBRyxXQUFXLENBQUM7UUFDL0IsSUFBSSxDQUFDLFVBQVUsR0FBRyxVQUFVLENBQUM7UUFDN0IsSUFBSSxDQUFDLGFBQWEsR0FBRyxVQUFVLENBQUMsQ0FBQyxDQUFDLGNBQUksQ0FBQyxPQUFPLENBQUMsVUFBVSxDQUFDLENBQUMsQ0FBQyxDQUFDLE9BQU8sQ0FBQyxHQUFHLEVBQUUsQ0FBQztRQUUzRSxnQ0FBZ0M7UUFDaEMsSUFBTSx5QkFBeUIsR0FBRyxDQUFDLE9BQU8sQ0FBQyxHQUFHLENBQUMseUJBQXlCLENBQUM7UUFDekUsSUFBTSwrQkFBK0IsR0FBRyxDQUFDLE9BQU8sQ0FBQyxHQUFHLENBQUMsK0JBQStCLENBQUM7UUFDckYsSUFBTSxvQkFBb0IsR0FBRyxDQUFDLE9BQU8sQ0FBQyxHQUFHLENBQUMsb0JBQW9CLENBQUM7UUFDL0QsSUFBTSxrQkFBa0IsR0FBRyxDQUFDLE9BQU8sQ0FBQyxHQUFHLENBQUMsa0JBQWtCLENBQUM7UUFDM0QsSUFBSSwrQkFBK0Is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
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiYnVpbGRlci5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbImZpbGU6Ly8vVXNlcnMvd2I0NDcxODgvRGVza3RvcC9uZXctcmVwby9mYy1idWlsZC9zcmMvdXRpbHMvYnVpbGRlci50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7OztBQUFBLDhDQUF3RTtBQUN4RSxzREFBMEI7QUFDMUIsOENBQXdCO0FBQ3hCLGtEQUE0QjtBQUM1QixrREFBdUI7QUFDdkIsc0VBQStDO0FBQy9DLCtDQUF5QztBQUN6QyxpQ0FBOEg7QUFDOUgsMkNBQStEO0FBQy9ELG1DQUF5RDtBQUN6RCx1Q0FBcUM7QUFFckMsK0NBQXVFO0FBQ3ZFLHVDQUEyRDtBQWEzRDtJQWFFLGlCQUFZLFdBQW1CLEVBQUUsU0FBa0IsRUFBRSxVQUFrQixFQUFFLFVBQWtCLEVBQUUsV0FBb0I7UUFDL0csSUFBSSxDQUFDLFdBQVcsR0FBRyxXQUFXLENBQUM7UUFDL0IsSUFBSSxDQUFDLFVBQVUsR0FBRyxVQUFVLENBQUM7UUFDN0IsSUFBSSxDQUFDLGFBQWEsR0FBRyxVQUFVLENBQUMsQ0FBQyxDQUFDLGNBQUksQ0FBQyxPQUFPLENBQUMsVUFBVSxDQUFDLENBQUMsQ0FBQyxDQUFDLE9BQU8sQ0FBQyxHQUFHLEVBQUUsQ0FBQztRQUUzRSxnQ0FBZ0M7UUFDaEMsSUFBTSx5QkFBeUIsR0FBRyxDQUFDLE9BQU8sQ0FBQyxHQUFHLENBQUMseUJBQXlCLENBQUM7UUFDekUsSUFBTSwrQkFBK0IsR0FBRyxDQUFDLE9BQU8sQ0FBQyxHQUFHLENBQUMsK0JBQStCLENBQUM7UUFDckYsSUFBTSxvQkFBb0IsR0FBRyxDQUFDLE9BQU8sQ0FBQyxHQUFHLENBQUMsb0JBQW9CLENBQUM7UUFDL0QsSUFBTSxrQkFBa0IsR0FBRyxDQUFDLE9BQU8sQ0FBQyxHQUFHLENBQUMsa0JBQWtCLENBQUM7UUFDM0QsSUFBSSwrQkFBK0Is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
 
 /***/ }),
 
@@ -90054,7 +90348,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 var _a, _b;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.isInterpretedLanguage = exports.resolveLibPathsFromLdConf = exports.readLines = exports.getArtifactPath = exports.checkCodeUri = exports.isCopyCodeBuildRuntime = exports.getExcludeFilesEnv = exports.sleep = exports.isDebug = void 0;
+exports.isInterpretedLanguage = exports.resolveLibPathsFromLdConf = exports.readLines = exports.getBuildFilesListJSONPath = exports.getArtifactPath = exports.checkCodeUri = exports.isCopyCodeBuildRuntime = exports.getExcludeFilesEnv = exports.sleep = exports.isDebug = void 0;
 var core_1 = __webpack_require__(7782);
 var constant_1 = __webpack_require__(9381);
 var lodash_1 = __importDefault(__webpack_require__(250));
@@ -90108,6 +90402,10 @@ function getArtifactPath(_a) {
     return path_1.default.join(rootArtifact, serviceName, functionName);
 }
 exports.getArtifactPath = getArtifactPath;
+function getBuildFilesListJSONPath(baseDir, serviceName, functionName) {
+    return path_1.default.join(baseDir, '.s', 'fc-build-link', serviceName + "-" + functionName + "-files_list.json");
+}
+exports.getBuildFilesListJSONPath = getBuildFilesListJSONPath;
 function readLines(fileName) {
     return new Promise(function (resolve, reject) {
         var lines = [];
@@ -90187,7 +90485,7 @@ function isInterpretedLanguage(runtime) {
     return runtime.startsWith('node') || runtime.startsWith('python') || runtime.startsWith('php');
 }
 exports.isInterpretedLanguage = isInterpretedLanguage;
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoidXRpbHMuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyJmaWxlOi8vL1VzZXJzL3diNDQ3MTg4L0Rlc2t0b3AvbmV3LXJlcG8vZmMtYnVpbGQvc3JjL3V0aWxzL3V0aWxzLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7QUFBQSw4Q0FBK0M7QUFDL0MsdUNBQThEO0FBQzlELGtEQUF1QjtBQUN2Qiw4Q0FBd0I7QUFDeEIsc0RBQWdDO0FBQ2hDLHNEQUEwQjtBQUkxQixJQUFNLGNBQWMsR0FBRyxjQUFJLENBQUMsSUFBSSxDQUFDLElBQUksRUFBRSxPQUFPLEVBQUUsV0FBVyxDQUFDLENBQUM7QUFDaEQsUUFBQSxPQUFPLGVBQUcsT0FBTyxDQUFDLEdBQUcsMENBQUUsV0FBVywwQ0FBRSxRQUFRLENBQUMsU0FBUyxFQUFFO0FBRXJFLFNBQWdCLEtBQUssQ0FBQyxFQUFVO0lBQzlCLE9BQU8sSUFBSSxPQUFPLENBQUMsVUFBQyxPQUFPO1FBQ3pCLFVBQVUsQ0FBQyxPQUFPLEVBQUUsRUFBRSxDQUFDLENBQUM7SUFDMUIsQ0FBQyxDQUFDLENBQUM7QUFDTCxDQUFDO0FBSkQsc0JBSUM7QUFFRCxTQUFnQixrQkFBa0I7SUFDaEMsT0FBTztRQUNMLElBQUk7UUFDSixPQUFPO0tBQ1IsQ0FBQyxJQUFJLENBQUMsR0FBRyxDQUFDLENBQUM7QUFDZCxDQUFDO0FBTEQsZ0RBS0M7QUFFRCxTQUFnQixzQkFBc0IsQ0FBQyxPQUFlO0lBQ3BELEtBQTZCLFVBQXVCLEVBQXZCLDRCQUFBLGtDQUF1QixFQUF2QixxQ0FBdUIsRUFBdkIsSUFBdUIsRUFBRTtRQUFqRCxJQUFNLGNBQWMsZ0NBQUE7UUFDdkIsSUFBSSxPQUFPLENBQUMsUUFBUSxDQUFDLGNBQWMsQ0FBQyxFQUFFO1lBQ3BDLE9BQU8sSUFBSSxDQUFDO1NBQ2I7S0FDRjtJQUNELE9BQU8sS0FBSyxDQUFDO0FBQ2YsQ0FBQztBQVBE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
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoidXRpbHMuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyJmaWxlOi8vL1VzZXJzL3diNDQ3MTg4L0Rlc2t0b3AvbmV3LXJlcG8vZmMtYnVpbGQvc3JjL3V0aWxzL3V0aWxzLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7QUFBQSw4Q0FBK0M7QUFDL0MsdUNBQThEO0FBQzlELGtEQUF1QjtBQUN2Qiw4Q0FBd0I7QUFDeEIsc0RBQWdDO0FBQ2hDLHNEQUEwQjtBQUkxQixJQUFNLGNBQWMsR0FBRyxjQUFJLENBQUMsSUFBSSxDQUFDLElBQUksRUFBRSxPQUFPLEVBQUUsV0FBVyxDQUFDLENBQUM7QUFDaEQsUUFBQSxPQUFPLGVBQUcsT0FBTyxDQUFDLEdBQUcsMENBQUUsV0FBVywwQ0FBRSxRQUFRLENBQUMsU0FBUyxFQUFFO0FBRXJFLFNBQWdCLEtBQUssQ0FBQyxFQUFVO0lBQzlCLE9BQU8sSUFBSSxPQUFPLENBQUMsVUFBQyxPQUFPO1FBQ3pCLFVBQVUsQ0FBQyxPQUFPLEVBQUUsRUFBRSxDQUFDLENBQUM7SUFDMUIsQ0FBQyxDQUFDLENBQUM7QUFDTCxDQUFDO0FBSkQsc0JBSUM7QUFFRCxTQUFnQixrQkFBa0I7SUFDaEMsT0FBTztRQUNMLElBQUk7UUFDSixPQUFPO0tBQ1IsQ0FBQyxJQUFJLENBQUMsR0FBRyxDQUFDLENBQUM7QUFDZCxDQUFDO0FBTEQsZ0RBS0M7QUFFRCxTQUFnQixzQkFBc0IsQ0FBQyxPQUFlO0lBQ3BELEtBQTZCLFVBQXVCLEVBQXZCLDRCQUFBLGtDQUF1QixFQUF2QixxQ0FBdUIsRUFBdkIsSUFBdUIsRUFBRTtRQUFqRCxJQUFNLGNBQWMsZ0NBQUE7UUFDdkIsSUFBSSxPQUFPLENBQUMsUUFBUSxDQUFDLGNBQWMsQ0FBQyxFQUFFO1lBQ3BDLE9BQU8sSUFBSSxDQUFDO1NBQ2I7S0FDRjtJQUNELE9BQU8sS0FBSyxDQUFDO0FBQ2YsQ0FBQztBQVBE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
 
 /***/ }),
 
@@ -90274,7 +90572,7 @@ module.exports = JSON.parse("[[\"0\",\"\\u0000\",128],[\"a1\",\"｡\",62],[\"814
 /***/ ((module) => {
 
 "use strict";
-module.exports = JSON.parse("{\"_from\":\"nested-object-assign@^1.0.4\",\"_id\":\"nested-object-assign@1.0.4\",\"_inBundle\":false,\"_integrity\":\"sha1-ydtWB462BDlg/ba6kYpRIqBsysQ=\",\"_location\":\"/nested-object-assign\",\"_phantomChildren\":{},\"_requested\":{\"type\":\"range\",\"registry\":true,\"raw\":\"nested-object-assign@^1.0.4\",\"name\":\"nested-object-assign\",\"escapedName\":\"nested-object-assign\",\"rawSpec\":\"^1.0.4\",\"saveSpec\":null,\"fetchSpec\":\"^1.0.4\"},\"_requiredBy\":[\"/\"],\"_resolved\":\"https://registry.npm.taobao.org/nested-object-assign/download/nested-object-assign-1.0.4.tgz\",\"_shasum\":\"c9db56078eb6043960fdb6ba918a5122a06ccac4\",\"_spec\":\"nested-object-assign@^1.0.4\",\"_where\":\"/Users/wb447188/Desktop/new-repo/fc-build\",\"author\":{\"name\":\"Geta AS / Eirik Horvath\",\"url\":\"https://github.com/Geta\"},\"bugs\":{\"url\":\"https://github.com/Geta/NestedObjectAssign/issues\"},\"bundleDependencies\":false,\"deprecated\":false,\"description\":\"Package to support nested merging of objects & properties, using Object.Assign\",\"devDependencies\":{\"babel\":\"^6.3.26\",\"babel-core\":\"^6.4.0\",\"babel-eslint\":\"^5.0.0-beta6\",\"babel-loader\":\"^6.2.1\",\"babel-plugin-add-module-exports\":\"^0.1.2\",\"babel-preset-es2015\":\"^6.3.13\",\"chai\":\"^3.4.1\",\"clean-webpack-plugin\":\"^0.1.8\",\"del\":\"^2.2.0\",\"eslint\":\"^1.10.3\",\"eslint-config-airbnb\":\"^4.0.0\",\"eslint-loader\":\"^1.2.0\",\"eslint-plugin-react\":\"^3.16.1\",\"eslint-plugin-standard\":\"^1.3.1\",\"gulp\":\"^3.9.0\",\"gulp-babel\":\"^6.1.1\",\"gulp-env\":\"^0.2.0\",\"gulp-eslint\":\"^1.1.1\",\"gulp-load-plugins\":\"^1.2.0\",\"gulp-util\":\"^3.0.6\",\"mocha\":\"^2.3.4\",\"object-assign\":\"^4.0.1\",\"webpack\":\"^1.12.11\",\"webpack-node-externals\":\"^0.4.1\"},\"files\":[\"README.md\",\"index.js\",\"lib\",\"dist\"],\"homepage\":\"https://github.com/Geta/NestedObjectAssign\",\"keywords\":[\"es6\",\"npm\",\"nested\",\"object\",\"assign\"],\"library\":{\"name\":\"nestedObjectAssign\",\"entry\":\"nestedObjectAssign.js\",\"dist-node\":\"nestedObjectAssign.js\",\"dist-web\":\"nestedObjectAssign.web.js\",\"bundle-node\":true},\"license\":\"MIT\",\"main\":\"./index.js\",\"name\":\"nested-object-assign\",\"repository\":{\"type\":\"git\",\"url\":\"git+https://github.com/Geta/NestedObjectAssign.git\"},\"scripts\":{\"build\":\"gulp build\",\"build-all\":\"gulp\",\"build-dev\":\"gulp build-dev\",\"build-web\":\"gulp build-web\",\"build-web-dev\":\"gulp build-web-dev\",\"postversion\":\"git push && git push --tags\",\"prepublish\":\"npm run build-all\",\"preversion\":\"npm run build-all && npm run unit\",\"start\":\"npm run-script build-dev\",\"test\":\"npm run unit-watch\",\"unit\":\"mocha --compilers js:babel-core/register --colors ./test/*.spec.js\",\"unit-watch\":\"mocha --compilers js:babel-core/register --colors -w ./test/*.spec.js\",\"version\":\"git add .\"},\"version\":\"1.0.4\"}");
+module.exports = JSON.parse("{\"name\":\"nested-object-assign\",\"version\":\"1.0.4\",\"description\":\"Package to support nested merging of objects & properties, using Object.Assign\",\"main\":\"./index.js\",\"scripts\":{\"start\":\"npm run-script build-dev\",\"prepublish\":\"npm run build-all\",\"preversion\":\"npm run build-all && npm run unit\",\"version\":\"git add .\",\"postversion\":\"git push && git push --tags\",\"build\":\"gulp build\",\"build-dev\":\"gulp build-dev\",\"build-web\":\"gulp build-web\",\"build-web-dev\":\"gulp build-web-dev\",\"build-all\":\"gulp\",\"unit\":\"mocha --compilers js:babel-core/register --colors ./test/*.spec.js\",\"unit-watch\":\"mocha --compilers js:babel-core/register --colors -w ./test/*.spec.js\",\"test\":\"npm run unit-watch\"},\"repository\":{\"type\":\"git\",\"url\":\"https://github.com/Geta/NestedObjectAssign.git\"},\"keywords\":[\"es6\",\"npm\",\"nested\",\"object\",\"assign\"],\"author\":{\"name\":\"Geta AS / Eirik Horvath\",\"url\":\"https://github.com/Geta\"},\"license\":\"MIT\",\"bugs\":{\"url\":\"https://github.com/Geta/NestedObjectAssign/issues\"},\"files\":[\"README.md\",\"index.js\",\"lib\",\"dist\"],\"homepage\":\"https://github.com/Geta/NestedObjectAssign\",\"devDependencies\":{\"babel\":\"^6.3.26\",\"babel-core\":\"^6.4.0\",\"babel-eslint\":\"^5.0.0-beta6\",\"babel-loader\":\"^6.2.1\",\"babel-plugin-add-module-exports\":\"^0.1.2\",\"babel-preset-es2015\":\"^6.3.13\",\"chai\":\"^3.4.1\",\"clean-webpack-plugin\":\"^0.1.8\",\"del\":\"^2.2.0\",\"eslint\":\"^1.10.3\",\"eslint-config-airbnb\":\"^4.0.0\",\"eslint-loader\":\"^1.2.0\",\"eslint-plugin-react\":\"^3.16.1\",\"eslint-plugin-standard\":\"^1.3.1\",\"gulp\":\"^3.9.0\",\"gulp-babel\":\"^6.1.1\",\"gulp-env\":\"^0.2.0\",\"gulp-eslint\":\"^1.1.1\",\"gulp-load-plugins\":\"^1.2.0\",\"gulp-util\":\"^3.0.6\",\"mocha\":\"^2.3.4\",\"object-assign\":\"^4.0.1\",\"webpack\":\"^1.12.11\",\"webpack-node-externals\":\"^0.4.1\"},\"library\":{\"name\":\"nestedObjectAssign\",\"entry\":\"nestedObjectAssign.js\",\"dist-node\":\"nestedObjectAssign.js\",\"dist-web\":\"nestedObjectAssign.web.js\",\"bundle-node\":true}}");
 
 /***/ }),
 
