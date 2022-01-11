@@ -1,4 +1,4 @@
-import { Logger, spinner } from '@serverless-devs/core';
+import { Logger, spinner, loadComponent } from '@serverless-devs/core';
 import _ from 'lodash';
 import fs from 'fs-extra';
 import tar from 'tar-fs';
@@ -8,8 +8,8 @@ import DraftLog from 'draftlog';
 import generatePwdFile from './passwd';
 import findPathsOutofSharedPaths from './docker-support';
 import { resolveLibPathsFromLdConf, checkCodeUri, getExcludeFilesEnv, isDebug, isInterpretedLanguage } from './utils';
-import { generateDebugEnv, addEnv } from './env';
-import { CONTEXT, DEFAULT_REGISTRY } from './constant';
+import { addEnv } from './env';
+import { CONTEXT } from './constant';
 import { IServiceProps, IFunctionProps, IObject, ICredentials } from '../interface';
 
 DraftLog.into(console);
@@ -26,11 +26,6 @@ interface IDockerEnvs {
   serviceProps: IServiceProps;
   functionProps: IFunctionProps;
   credentials: ICredentials;
-  ishttpTrigger?: boolean;
-  debugPort?: string;
-  debugIde?: string;
-  debugArgs?: any;
-  httpParams?: IObject;
 }
 
 function generateFunctionEnvs(functionProps: IFunctionProps): IObject {
@@ -104,16 +99,6 @@ async function detectDockerVersion(serverVersion: string): Promise<void> {
   }
 }
 
-async function imageExist(imageName: string): Promise<boolean> {
-  const images = await docker.listImages({
-    filters: {
-      reference: [imageName],
-    },
-  });
-
-  return images.length > 0;
-}
-
 function followProgress(stream, onFinished) {
   const barLines = {};
 
@@ -145,33 +130,6 @@ function followProgress(stream, onFinished) {
   docker.modem.followProgress(stream, onFinished, onProgress);
 }
 
-async function pullImage(imageName: string): Promise<void> {
-  const stream = await docker.pull(imageName);
-
-  const registry = DEFAULT_REGISTRY;
-
-  return await new Promise((resolve, reject) => {
-    Logger.info(
-      CONTEXT,
-      `begin pulling image ${imageName}, you can also use docker pull ${imageName} to pull image by yourself.`,
-    );
-
-    const onFinished = async (err) => {
-      containers.delete(stream);
-
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve(registry);
-    };
-
-    containers.add(stream);
-    // pull image progress
-    followProgress(stream, onFinished);
-  });
-}
-
 export function generateRamdomContainerName(): string {
   return `s_local_${new Date().getTime()}_${Math.random().toString(36).substr(2, 7)}`;
 }
@@ -184,40 +142,15 @@ export async function generateDockerEnvs({
   serviceProps,
   functionName,
   functionProps,
-  debugPort,
-  httpParams,
-  ishttpTrigger,
-  debugIde,
-  debugArgs,
 }: IDockerEnvs) {
   const envs: IObject = {};
-
-  if (httpParams) {
-    Object.assign(envs, { FC_HTTP_PARAMS: httpParams });
-  }
 
   const { runtime, codeUri } = functionProps;
 
   const confEnv = await resolveLibPathsFromLdConf(baseDir, checkCodeUri(codeUri));
 
   Object.assign(envs, confEnv);
-
-  if (debugPort && !debugArgs) {
-    const debugEnv = generateDebugEnv(runtime, debugPort, debugIde);
-
-    Object.assign(envs, debugEnv);
-  } else if (debugArgs) {
-    Object.assign(envs, {
-      DEBUG_OPTIONS: debugArgs,
-    });
-  }
-
-  if (ishttpTrigger && runtime === 'java8') {
-    envs.fc_enable_new_java_ca = 'true';
-  }
-
   Object.assign(envs, generateFunctionEnvs(functionProps));
-
   Object.assign(envs, {
     local: true,
     BUILD_EXCLIUDE_FILES: getExcludeFilesEnv(),
@@ -290,7 +223,8 @@ export async function resolvePasswdMount(contentDir?: string): Promise<any> {
 }
 
 export async function dockerRun(opts: any): Promise<any> {
-  await pullImageIfNeed(opts.Image);
+  const fcCore = await loadComponent('devsapp/fc-core');
+  await fcCore.pullImageIfNeed(docker, opts.Image);
 
   const container = await createContainer(opts);
   const vm = isDebug ? undefined : spinner('builder begin to build\n');
@@ -336,18 +270,6 @@ export async function dockerRun(opts: any): Promise<any> {
   containers.delete(container.id);
 
   return exitRs;
-}
-
-export async function pullImageIfNeed(imageName: string): Promise<void> {
-  Logger.debug(CONTEXT, `Determine whether the docker image '${imageName}' exists.`);
-  const exist = await imageExist(imageName);
-  Logger.debug(CONTEXT, `Iamge '${imageName}' ${exist ? 'exists' : 'not exists'}.`);
-
-  if (!exist) {
-    await pullImage(imageName);
-  } else {
-    Logger.info(CONTEXT, `skip pulling image ${imageName}...`);
-  }
 }
 
 export function buildImage(dockerBuildDir: string, dockerfilePath: string, imageTag: string): Promise<string> {
@@ -399,11 +321,6 @@ export async function generateDockerfileEnvs(credentials: ICredentials, region: 
     serviceProps,
     functionName,
     functionProps,
-    debugPort: null,
-    httpParams: null,
-    ishttpTrigger: null,
-    debugIde: null,
-    debugArgs: null,
   });
   const DockerfilEnvs = [];
   Object.keys(DockerEnvs).forEach((key) => {

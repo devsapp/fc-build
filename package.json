@@ -2,22 +2,13 @@
   "name": "fc-build",
   "version": "0.0.20",
   "main": "./dist/index.js",
-  "fc-docker": {
-    "version": "1.9.21",
-    "registry_default": "registry.cn-beijing.aliyuncs.com",
-    "registry_mirrors": [
-      "registry.cn-beijing.aliyuncs.com",
-      "registry.hub.docker.com"
-    ]
-  },
   "dependencies": {
     "@alicloud/fc-builders": "^0.15.3",
-    "@serverless-devs/core": "^0.0.x",
+    "@serverless-devs/core": "latest",
     "dockerfile-ast": "^0.3.2",
     "dockerode": "^3.2.1",
     "draftlog": "^1.0.12",
     "fs-extra": "^9.1.0",
-    "ip": "^1.1.5",
     "js-yaml": "^4.0.0",
     "lodash": "^4.17.20",
     "nested-object-assign": "^1.0.4",
@@ -43,10 +34,10 @@
     "typescript": "^3.9.7"
   },
   "scripts": {
-    "start": "npm run dev",
-    "dev": "npm run prebuild && npx tsc -w -p tsconfig.json",
+    "start": "npm run prebuild && npm run dev",
+    "dev": "npx tsc -w -p tsconfig.json",
     "prebuild": "rm -rf node_modules && rm -rf package-lock.json && npm i && rimraf dist",
-    "build": "npm run fix && npm run lint && ncc build src/index.ts -m -e @serverless-devs/core -o dist",
+    "build": "npm run fix && npm run lint && npx ncc build src/index.ts -m -e @serverless-devs/core -o dist",
     "test": "jest",
     "test:cov": "jest --coverage",
     "lint": "f2elint scan",
