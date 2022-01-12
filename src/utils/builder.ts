@@ -182,14 +182,13 @@ export default class Builder {
       await this.buildArtifact(buildInput, baseDir, resolvedCodeUri, funcArtifactDir);
     }
 
-    if (runtime.startsWith('node') || runtime.startsWith('python') || runtime.startsWith('php')) {
-      await this.fcCore.buildLink({
-        configDirPath: baseDir,
-        codeUri: src,
-        serviceName: buildInput.serviceName,
-        functionName: buildInput.functionName,
-      });
-    }
+    await this.fcCore.buildLink({
+      configDirPath: baseDir,
+      codeUri: src,
+      runtime,
+      serviceName: buildInput.serviceName,
+      functionName: buildInput.functionName,
+    }, false);
 
     return { buildSaveUri };
   }

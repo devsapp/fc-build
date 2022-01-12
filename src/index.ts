@@ -63,7 +63,7 @@ export default class Build {
       },
     };
 
-    await fcCore.setBuildStatus(serviceName, functionName, '', 'unavailable');
+    await fcCore.setBuildState(serviceName, functionName, '', { status: 'unavailable' });
     const builder = new Builder(projectName, useDocker, dockerfile, inputs?.path?.configPath, useBuildkit, fcCore);
 
     const output: IOutput = {
@@ -79,7 +79,7 @@ export default class Build {
     }
 
     Logger.info('Build artifact successfully.');
-    await fcCore.setBuildStatus(serviceName, functionName, '', 'available');
+    await fcCore.setBuildState(serviceName, functionName, '', { status: 'available' });
     return output;
   }
 }
