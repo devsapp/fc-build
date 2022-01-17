@@ -6,6 +6,5 @@ interface IOutput {
 }
 export default class Build {
     build(inputs: IInputs): Promise<IOutput>;
-    private getStateId;
 }
 export {};

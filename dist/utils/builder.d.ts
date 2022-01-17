@@ -13,6 +13,7 @@ export default class Builder {
     logger: ILogger;
     private readonly useDocker;
     private dockerfile;
+    private fcCore;
     private projectName;
     private configDirPath;
     private readonly useBuildkit;
@@ -20,7 +21,7 @@ export default class Builder {
     private readonly buildkitServerPort;
     static stages: string[];
     static defaultbuildkitServerPort: number;
-    constructor(projectName: string, useDocker: boolean, dockerfile: string, configPath: string, useBuildkit: boolean);
+    constructor(projectName: string, useDocker: boolean, dockerfile: string, configPath: string, useBuildkit: boolean, fcCore: any);
     private checkCustomContainerConfig;
     private buildImageWithBuildkit;
     buildImage(buildInput: IBuildInput): Promise<string>;

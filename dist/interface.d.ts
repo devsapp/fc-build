@@ -18,6 +18,7 @@ export interface IBuildInput {
     verbose?: boolean;
     region?: string;
     credentials?: ICredentials;
+    cleanUselessImage?: Boolean;
 }
 export interface IProperties {
     region: string;
