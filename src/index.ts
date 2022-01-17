@@ -1,5 +1,4 @@
-import { reportComponent, commandParse, help, setState } from '@serverless-devs/core';
-import path from 'path';
+import { reportComponent, commandParse, help, loadComponent } from '@serverless-devs/core';
 import Builder from './utils/builder';
 import { IInputs, IBuildInput } from './interface';
 import { CONTEXT, HELP, CONTEXT_NAME } from './utils/constant';
@@ -12,12 +11,6 @@ interface IOutput {
   buildSaveUri?: string;
 }
 
-const STATUS = {
-  available: 'available',
-  unavailable: 'unavailable',
-};
-const statusPath = path.join(process.cwd(), '.s', 'fc-build');
-
 export default class Build {
   async build(inputs: IInputs) {
     Logger.info('Build artifact start...');
@@ -26,14 +19,14 @@ export default class Build {
 
     const apts = {
       string: ['dockerfile'],
-      boolean: ['help', 'use-docker', 'use-buildkit'],
+      boolean: ['help', 'use-docker', 'use-buildkit', 'clean-useless-image'],
       alias: { dockerfile: 'f', 'use-docker': 'd', help: 'h' },
     };
     const argsData: any = commandParse(inputs, apts).data || {};
     const { dockerfile = '', h }: any = argsData;
     const useBuildkit: boolean = argsData['use-buildkit'];
     const useDocker: boolean = argsData['use-docker'];
-
+    const cleanUselessImage = argsData['clean-useless-image'];
 
     if (h) {
       help(HELP);
@@ -49,8 +42,9 @@ export default class Build {
     const { region, service: serviceProps, function: functionProps } = inputs.props;
     const { runtime } = functionProps;
 
+    const fcCore = await loadComponent('devsapp/fc-core');
     if (!runtime) {
-      throw new Error('Parameter function.runtime is required');
+      throw new fcCore.CatchableError('Parameter function.runtime is required');
     }
 
     const serviceName = serviceProps.name;
@@ -60,6 +54,7 @@ export default class Build {
       serviceProps,
       functionProps,
       serviceName,
+      cleanUselessImage,
       functionName,
       credentials: {
         AccountID: '',
@@ -68,9 +63,8 @@ export default class Build {
       },
     };
 
-    const stateId = this.getStateId(serviceName, functionName);
-    await setState(stateId, { status: STATUS.unavailable }, statusPath);
-    const builder = new Builder(projectName, useDocker, dockerfile, inputs?.path?.configPath, useBuildkit);
+    await fcCore.setBuildState(serviceName, functionName, '', { status: 'unavailable' });
+    const builder = new Builder(projectName, useDocker, dockerfile, inputs?.path?.configPath, useBuildkit, fcCore);
 
     const output: IOutput = {
       props: inputs.props,
@@ -85,11 +79,7 @@ export default class Build {
     }
 
     Logger.info('Build artifact successfully.');
-    await setState(stateId, { status: STATUS.available }, statusPath);
+    await fcCore.setBuildState(serviceName, functionName, '', { status: 'available' });
     return output;
-  }
-
-  private getStateId(serviceName: string, functionName: string): string {
-    return `${serviceName}-${functionName}-build`;
   }
 }

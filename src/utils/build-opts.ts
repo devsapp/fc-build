@@ -38,6 +38,7 @@ export async function generateBuildContainerBuildOpts({
 
   const containerName = docker.generateRamdomContainerName();
 
+  // TODO: 加载 env
   const envs = await docker.generateDockerEnvs({
     region,
     baseDir,

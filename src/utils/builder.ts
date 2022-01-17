@@ -1,4 +1,5 @@
-import { HLogger, ILogger, loadComponent } from '@serverless-devs/core';
+import { HLogger, ILogger } from '@serverless-devs/core';
+import Docker from 'dockerode';
 import fs from 'fs-extra';
 import path from 'path';
 import rimraf from 'rimraf';
@@ -29,6 +30,7 @@ export default class Builder {
 
   private readonly useDocker: boolean;
   private dockerfile: string;
+  private fcCore: any;
   private projectName: string;
   private configDirPath: any;
   private readonly useBuildkit: boolean;
@@ -37,7 +39,8 @@ export default class Builder {
   static stages: string[] = ['install', 'build'];
   static defaultbuildkitServerPort = 65360;
 
-  constructor(projectName: string, useDocker: boolean, dockerfile: string, configPath: string, useBuildkit: boolean) {
+  constructor(projectName: string, useDocker: boolean, dockerfile: string, configPath: string, useBuildkit: boolean, fcCore: any) {
+    this.fcCore = fcCore;
     this.projectName = projectName;
     this.dockerfile = dockerfile;
     this.configDirPath = configPath ? path.dirname(configPath) : process.cwd();
@@ -80,13 +83,13 @@ export default class Builder {
   private checkCustomContainerConfig(customContainerConfig: any): {dockerFileName: string; imageName: string} {
     if (_.isEmpty(customContainerConfig?.image)) {
       const errorMessage = 'function::customContainer::image atttribute value is empty in the configuration file.';
-      throw new Error(errorMessage);
+      throw new this.fcCore.CatchableError(errorMessage);
     }
 
     const dockerFileName = path.resolve(this.dockerfile || 'Dockerfile');
     if (!fs.existsSync(dockerFileName)) {
       const msg = 'Cannot find the Dockerfile file, please make sure the Dockerfile file exists in the current working directory, or specify the Dockerfile file path through --dockerfile <path>';
-      throw new Error(msg);
+      throw new this.fcCore.CatchableError(msg);
     }
 
     return {
@@ -134,13 +137,14 @@ export default class Builder {
 
   async build(buildInput: IBuildInput): Promise<IBuildOutput> {
     const { useDocker, useBuildkit } = this;
-    const { functionProps } = buildInput;
+    const { functionProps, cleanUselessImage } = buildInput;
     const { codeUri, runtime } = functionProps;
     const baseDir = this.configDirPath;
     const isContainer = runtime === 'custom-container';
     if (useBuildkit) {
       this.logger.info('Use buildkit for building.');
     } else if (useDocker || isContainer) {
+      await this.fcCore.preExecute?.(new Docker(), cleanUselessImage);
       this.logger.info('Use docker for building.');
     }
 
@@ -178,15 +182,13 @@ export default class Builder {
       await this.buildArtifact(buildInput, baseDir, resolvedCodeUri, funcArtifactDir);
     }
 
-    if (runtime.startsWith('node') || runtime.startsWith('python') || runtime.startsWith('php')) {
-      const fcBuildLink = await loadComponent('devsapp/fc-build-link');
-      await fcBuildLink.linkWithProps({
-        configDirPath: baseDir,
-        codeUri: src,
-        serviceName: buildInput.serviceName,
-        functionName: buildInput.functionName,
-      });
-    }
+    await this.fcCore.buildLink({
+      configDirPath: baseDir,
+      codeUri: src,
+      runtime,
+      serviceName: buildInput.serviceName,
+      functionName: buildInput.functionName,
+    }, false);
 
     return { buildSaveUri };
   }
@@ -278,7 +280,7 @@ export default class Builder {
     const exitRs = await dockerRun(opts);
     if (exitRs.StatusCode !== 0) {
       const errorMessage = `build function ${serviceName}/${functionName} error.`;
-      throw new Error(errorMessage);
+      throw new this.fcCore.CatchableError(errorMessage);
     }
   }
 
