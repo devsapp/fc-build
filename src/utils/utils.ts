@@ -5,9 +5,8 @@ import path from 'path';
 import readline from 'readline';
 import fs from 'fs-extra';
 
-import { ICodeUri, IBuildDir, IObject } from '../interface';
+import { ICodeUri, IObject } from '../interface';
 
-const BUILDARTIFACTS = path.join('.s', 'build', 'artifacts');
 export const isDebug = process.env?.temp_params?.includes('--debug');
 
 export function sleep(ms: number) {
@@ -49,15 +48,6 @@ export function checkCodeUri(codeUri: string | ICodeUri): string {
     return '';
   }
   return src;
-}
-
-export function getArtifactPath({ baseDir, serviceName, functionName }: IBuildDir): string {
-  const rootArtifact = path.join(baseDir, BUILDARTIFACTS);
-  return path.join(rootArtifact, serviceName, functionName);
-}
-
-export function getBuildFilesListJSONPath(baseDir: string, serviceName: string, functionName: string) {
-  return path.join(baseDir, '.s', 'fc-build-link', `${serviceName}-${functionName}-files_list.json`);
 }
 
 export function readLines(fileName: string): Promise<string[]> {
@@ -117,8 +107,4 @@ export async function resolveLibPathsFromLdConf(
     envs.LD_LIBRARY_PATH = libPaths.map((p) => `/code/.s/root${p}`).join(':');
   }
   return envs;
-}
-
-export function isInterpretedLanguage(runtime: string) {
-  return runtime.startsWith('node') || runtime.startsWith('python') || runtime.startsWith('php');
 }
