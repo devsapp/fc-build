@@ -7,7 +7,7 @@ import Docker from 'dockerode';
 import DraftLog from 'draftlog';
 import generatePwdFile from './passwd';
 import findPathsOutofSharedPaths from './docker-support';
-import { resolveLibPathsFromLdConf, checkCodeUri, getExcludeFilesEnv, isDebug, isInterpretedLanguage } from './utils';
+import { resolveLibPathsFromLdConf, checkCodeUri, getExcludeFilesEnv, isDebug } from './utils';
 import { addEnv } from './env';
 import { CONTEXT } from './constant';
 import { IServiceProps, IFunctionProps, IObject, ICredentials } from '../interface';
@@ -147,11 +147,20 @@ export async function generateDockerEnvs({
 
   const { runtime, codeUri } = functionProps;
 
-  const confEnv = await resolveLibPathsFromLdConf(baseDir, checkCodeUri(codeUri));
+  // 处理 codeUri，路径可能是绝对路径和相对路径
+  let codeSrc = checkCodeUri(codeUri);
+  if (path.isAbsolute(codeSrc)) {
+    codeSrc = path.relative(baseDir, codeSrc);
+  }
+  const confEnv = await resolveLibPathsFromLdConf(baseDir, codeSrc);
+
+  const fcCore = await loadComponent('devsapp/fc-core');
+  const ONLY_CPOY_MANIFEST_FILE = fcCore.isInterpretedLanguage(runtime, path.join(baseDir, codeSrc)) ? 'true' : '';
 
   Object.assign(envs, confEnv);
   Object.assign(envs, generateFunctionEnvs(functionProps));
   Object.assign(envs, {
+    ONLY_CPOY_MANIFEST_FILE,
     local: true,
     BUILD_EXCLIUDE_FILES: getExcludeFilesEnv(),
     TOOL_CACHE_PATH: '.s',
@@ -165,7 +174,6 @@ export async function generateDockerEnvs({
     FC_TIMEOUT: functionProps.timeout || 3,
     FC_INITIALIZER: functionProps.initializer,
     FC_INITIALIZATIONIMEOUT: functionProps.initializationTimeout || 3,
-    ONLY_CPOY_MANIFEST_FILE: isInterpretedLanguage(runtime) ? 'true' : '',
     FC_SERVICE_NAME: serviceName,
     // @ts-ignore: 多类型，动态判断
     FC_SERVICE_LOG_PROJECT: ((serviceProps || {}).logConfig || {}).project,

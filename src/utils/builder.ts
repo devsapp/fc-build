@@ -1,4 +1,4 @@
-import { HLogger, ILogger, loadComponent } from '@serverless-devs/core';
+import { HLogger, ILogger } from '@serverless-devs/core';
 import Docker from 'dockerode';
 import fs from 'fs-extra';
 import path from 'path';
@@ -6,7 +6,7 @@ import rimraf from 'rimraf';
 import _ from 'lodash';
 import fcBuilders from '@alicloud/fc-builders';
 import { execSync } from 'child_process';
-import { checkCodeUri, getArtifactPath, getExcludeFilesEnv, isInterpretedLanguage, getBuildFilesListJSONPath } from './utils';
+import { checkCodeUri, getExcludeFilesEnv } from './utils';
 import { generateBuildContainerBuildOpts } from './build-opts';
 import { dockerRun, resolvePasswdMount } from './docker';
 import { CONTEXT } from './constant';
@@ -170,8 +170,7 @@ export default class Builder {
       return {};
     }
 
-    const resolvedCodeUri = path.join(baseDir, src);
-
+    const resolvedCodeUri = path.isAbsolute(src) ? src : path.join(baseDir, src);
     const funcArtifactDir = await this.initBuildArtifactDir({ baseDir, serviceName: buildInput.serviceProps.name, functionName: buildInput.functionProps.name });
     const buildSaveUri = funcArtifactDir;
     if (useBuildkit) {
@@ -292,13 +291,12 @@ export default class Builder {
     process.env.TOOL_CACHE_PATH = '.s';
 
     const { runtime } = functionProps;
-    const fcCore = await loadComponent('devsapp/fc-core');
-    const [result, details] = await fcCore.checkLanguage(runtime);
+    const [result, details] = await this.fcCore.checkLanguage(runtime);
     if (!result && details) {
-      throw new fcCore.CatchableError(details);
+      throw new this.fcCore.CatchableError(details);
     }
 
-    if (isInterpretedLanguage(runtime)) {
+    if (this.fcCore.isInterpretedLanguage(runtime, codeUri)) {
       process.env.ONLY_CPOY_MANIFEST_FILE = 'true';
     }
 
@@ -357,7 +355,7 @@ export default class Builder {
   }
 
   async initBuildArtifactDir({ baseDir, serviceName, functionName }: IBuildDir): Promise<string> {
-    const artifactPath = getArtifactPath({ baseDir, serviceName, functionName });
+    const artifactPath = this.fcCore.getBuildArtifactPath(baseDir, serviceName, functionName);
     this.logger.debug(`[${this.projectName}] Build save url: ${artifactPath}.`);
 
     if (fs.pathExistsSync(artifactPath)) {
@@ -380,7 +378,7 @@ export default class Builder {
 
     // 每次 build 之前清除 build-link 的缓存，防止生成连接判断条件失效
     try {
-      const buildFilesListJSONPath = getBuildFilesListJSONPath(baseDir, serviceName, functionName);
+      const buildFilesListJSONPath = this.fcCore.genBuildLinkFilesListJSONPath(baseDir, serviceName, functionName);
       this.logger.debug(`[${this.projectName}] Build link save url: ${buildFilesListJSONPath}.`);
       await fs.remove(buildFilesListJSONPath);
     } catch (_ex) { /** 如果异常不阻塞主进程运行 */ }
