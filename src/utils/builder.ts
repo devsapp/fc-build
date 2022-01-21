@@ -1,4 +1,4 @@
-import { HLogger, ILogger } from '@serverless-devs/core';
+import { HLogger, ILogger, loadComponent } from '@serverless-devs/core';
 import Docker from 'dockerode';
 import fs from 'fs-extra';
 import path from 'path';
@@ -286,12 +286,17 @@ export default class Builder {
 
   async buildArtifact(
     { serviceName, functionName, functionProps, verbose = true }: IBuildInput,
-    baseDir: string, codeUri: string, funcArtifactDir: string,
+    _baseDir: string, codeUri: string, funcArtifactDir: string,
   ): Promise<void> {
     process.env.BUILD_EXCLIUDE_FILES = getExcludeFilesEnv();
     process.env.TOOL_CACHE_PATH = '.s';
 
     const { runtime } = functionProps;
+    const fcCore = await loadComponent('devsapp/fc-core');
+    const [result, details] = await fcCore.checkLanguage(runtime);
+    if (!result && details) {
+      throw new fcCore.CatchableError(details);
+    }
 
     if (isInterpretedLanguage(runtime)) {
       process.env.ONLY_CPOY_MANIFEST_FILE = 'true';
