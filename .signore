@@ -3,7 +3,7 @@ node_modules
 tsconfig.json
 tsconfig.base.json
 LICENSE
-package-lok.json
+package-lock.json
 .prettierrc.js
 .prettierignore
 .eslintrc.js
@@ -19,8 +19,11 @@ package-lok.json
 .git
 
 README.md
+readme.md
+src
 ./examples
 ./test
 ./Makefile
 ./f2elint.config.js
 ./commitlint.config.js
+./docs

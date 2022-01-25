@@ -1,5 +1,5 @@
 import { Logger } from '@serverless-devs/core';
-import { CONTEXT, SUPPORTRUNTIMEBUILDList } from './constant';
+import { CONTEXT } from './constant';
 import _ from 'lodash';
 import path from 'path';
 import readline from 'readline';
@@ -20,15 +20,6 @@ export function getExcludeFilesEnv(): string {
     '.s',
     's.yml',
   ].join(';');
-}
-
-export function isCopyCodeBuildRuntime(runtime: string): boolean {
-  for (const supportRuntime of SUPPORTRUNTIMEBUILDList) {
-    if (runtime.includes(supportRuntime)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 export function checkCodeUri(codeUri: string | ICodeUri): string {

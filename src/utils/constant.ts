@@ -1,5 +1,3 @@
-export const SUPPORTRUNTIMEBUILDList = ['nodejs', 'python', 'php', 'custom'];
-
 export const CONTEXT = 'FC-BUILD';
 export const CONTEXT_NAME = 'fc-build';
 
