@@ -28,7 +28,7 @@ export default class Builder {
     build(buildInput: IBuildInput): Promise<IBuildOutput>;
     private buildInBuildtkit;
     buildInDocker({ region, serviceName, serviceProps, functionName, functionProps, verbose, credentials, }: IBuildInput, baseDir: string, codeUri: string, funcArtifactDir: string): Promise<void>;
-    buildArtifact({ serviceName, functionName, functionProps, verbose }: IBuildInput, baseDir: string, codeUri: string, funcArtifactDir: string): Promise<void>;
+    buildArtifact({ serviceName, functionName, functionProps, verbose }: IBuildInput, _baseDir: string, codeUri: string, funcArtifactDir: string): Promise<void>;
     codeSkipBuild({ baseDir, codeUri, runtime }: INeedBuild): Promise<boolean>;
     isOnlyDefaultTaskFlow(taskFlows: any): boolean;
     initBuildArtifactDir({ baseDir, serviceName, functionName }: IBuildDir): Promise<string>;

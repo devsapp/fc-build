@@ -1,11 +1,7 @@
-import { ICodeUri, IBuildDir, IObject } from '../interface';
+import { ICodeUri, IObject } from '../interface';
 export declare const isDebug: boolean;
 export declare function sleep(ms: number): Promise<unknown>;
 export declare function getExcludeFilesEnv(): string;
-export declare function isCopyCodeBuildRuntime(runtime: string): boolean;
 export declare function checkCodeUri(codeUri: string | ICodeUri): string;
-export declare function getArtifactPath({ baseDir, serviceName, functionName }: IBuildDir): string;
-export declare function getBuildFilesListJSONPath(baseDir: string, serviceName: string, functionName: string): string;
 export declare function readLines(fileName: string): Promise<string[]>;
 export declare function resolveLibPathsFromLdConf(baseDir: string, codeUri: string): Promise<IObject>;
-export declare function isInterpretedLanguage(runtime: string): boolean;
