@@ -1,8 +1,9 @@
-import { reportComponent, commandParse, help, loadComponent } from '@serverless-devs/core';
+import { commandParse, help, loadComponent, getCredential } from '@serverless-devs/core';
 import Builder from './utils/builder';
 import { IInputs, IBuildInput } from './interface';
-import { CONTEXT, HELP, CONTEXT_NAME } from './utils/constant';
+import { CONTEXT, HELP, FC_BACKEND } from './utils/constant';
 import Logger from './common/logger';
+import { logger } from '@serverless-devs/core/dist/logger';
 
 Logger.setContent(CONTEXT);
 interface IOutput {
@@ -27,17 +28,12 @@ export default class Build {
     const useBuildkit: boolean = argsData['use-buildkit'];
     const useDocker: boolean = argsData['use-docker'];
     const cleanUselessImage = argsData['clean-useless-image'];
+    const useKaniko: boolean = process.env.BUILD_IMAGE_ENV === FC_BACKEND;
 
     if (h) {
       help(HELP);
       return;
     }
-
-    reportComponent(CONTEXT_NAME, {
-      command: 'build',
-      uid: inputs.credentials?.AccountID,
-      remark: 'fc build',
-    });
 
     const { region, service: serviceProps, function: functionProps } = inputs.props;
     const { runtime } = functionProps;
@@ -56,13 +52,17 @@ export default class Build {
       serviceName,
       cleanUselessImage,
       functionName,
-      credentials: {
+      credentials: { // buildkit 需要密钥信息
         AccountID: '',
         AccessKeyID: '',
         AccessKeySecret: '',
+        SecurityToken: '',
       },
     };
-
+    if (useBuildkit || useKaniko) {
+      logger.debug(`params add credentials becase useBuildkit=${useBuildkit} or useKaniko=${useKaniko}`);
+      params.credentials = inputs.credentials?.AccountID ? inputs.credentials : await getCredential(inputs.project?.access);
+    }
     await fcCore.setBuildState(serviceName, functionName, '', { status: 'unavailable' });
     const builder = new Builder(projectName, useDocker, dockerfile, inputs?.path?.configPath, useBuildkit, fcCore);
 
