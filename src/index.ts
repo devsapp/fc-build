@@ -1,7 +1,7 @@
-import { reportComponent, commandParse, help, loadComponent } from '@serverless-devs/core';
+import { commandParse, help, loadComponent, getCredential } from '@serverless-devs/core';
 import Builder from './utils/builder';
 import { IInputs, IBuildInput } from './interface';
-import { CONTEXT, HELP, CONTEXT_NAME } from './utils/constant';
+import { CONTEXT, HELP } from './utils/constant';
 import Logger from './common/logger';
 
 Logger.setContent(CONTEXT);
@@ -33,12 +33,6 @@ export default class Build {
       return;
     }
 
-    reportComponent(CONTEXT_NAME, {
-      command: 'build',
-      uid: inputs.credentials?.AccountID,
-      remark: 'fc build',
-    });
-
     const { region, service: serviceProps, function: functionProps } = inputs.props;
     const { runtime } = functionProps;
 
@@ -56,12 +50,15 @@ export default class Build {
       serviceName,
       cleanUselessImage,
       functionName,
-      credentials: {
+      credentials: { // buildkit 需要密钥信息
         AccountID: '',
         AccessKeyID: '',
         AccessKeySecret: '',
       },
     };
+    if (useBuildkit) {
+      params.credentials = inputs.credentials?.AccountID ? inputs.credentials : await getCredential(inputs.project?.access);
+    }
 
     await fcCore.setBuildState(serviceName, functionName, '', { status: 'unavailable' });
     const builder = new Builder(projectName, useDocker, dockerfile, inputs?.path?.configPath, useBuildkit, fcCore);

@@ -13,6 +13,7 @@ import { CONTEXT } from './constant';
 import { IBuildInput, ICodeUri, IBuildDir } from '../interface';
 import { getFunfile, processFunfileForBuildkit } from './install-file';
 import { generateDockerfileForBuildkit } from './buildkit';
+import { mockDockerConfigFile } from './mock-cr-login';
 
 interface INeedBuild {
   baseDir: string;
@@ -82,7 +83,7 @@ export default class Builder {
 
   private checkCustomContainerConfig(customContainerConfig: any): {dockerFileName: string; imageName: string} {
     if (_.isEmpty(customContainerConfig?.image)) {
-      const errorMessage = 'function::customContainer::image atttribute value is empty in the configuration file.';
+      const errorMessage = 'function::customContainerConfig::image atttribute value is empty in the configuration file.';
       throw new this.fcCore.CatchableError(errorMessage);
     }
 
@@ -101,12 +102,15 @@ export default class Builder {
   private async buildImageWithBuildkit(buildInput: IBuildInput): Promise<string> {
     const { customContainerConfig } = buildInput.functionProps;
     const { dockerFileName, imageName } = this.checkCustomContainerConfig(customContainerConfig);
+    console.log(':::::::: ', process.env.enableBuildkitServer, this.enableBuildkitServer);
     if (this.enableBuildkitServer) {
+      await mockDockerConfigFile(buildInput.region, imageName, buildInput.credentials);
+      // execSync(`buildctl build --no-cache \
       execSync(`buildctl --addr tcp://localhost:${this.buildkitServerPort} build --no-cache \
             --frontend dockerfile.v0 \
             --local context=${path.dirname(dockerFileName)} \
             --local dockerfile=${path.dirname(dockerFileName)} \
-            --output type=image,name=${imageName}`, {
+            --output type=image,name=${imageName},push=true`, {
         stdio: 'inherit',
       });
     } else {

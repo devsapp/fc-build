@@ -1,5 +1,4 @@
 export const CONTEXT = 'FC-BUILD';
-export const CONTEXT_NAME = 'fc-build';
 
 export const HELP = [
   {
