@@ -10,6 +10,7 @@ const sysLibs = [
   '/lib/x86_64-linux-gnu',
   '/python/lib/python2.7/site-packages',
   '/python/lib/python3.6/site-packages',
+  '/python/lib/python3.9/site-packages',
 ];
 const sysPaths = ['/usr/local/bin', '/usr/local/sbin', '/usr/bin', '/usr/sbin', '/sbin', '/bin'];
 const fcPaths = ['/code', '/code/node_modules/.bin'];
