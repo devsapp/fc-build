@@ -53,3 +53,6 @@ export const HELP = [
     ],
   },
 ];
+
+
+export const FC_BACKEND = 'fc-backend';

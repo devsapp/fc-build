@@ -1,5 +1,4 @@
 export declare const CONTEXT = "FC-BUILD";
-export declare const CONTEXT_NAME = "fc-build";
 export declare const HELP: ({
     header: string;
     content: string;
@@ -30,3 +29,4 @@ export declare const HELP: ({
     }[];
     content?: undefined;
 })[];
+export declare const FC_BACKEND = "fc-backend";

@@ -21,9 +21,11 @@ export default class Builder {
     private readonly buildkitServerPort;
     static stages: string[];
     static defaultbuildkitServerPort: number;
+    private buildImageEnv;
     constructor(projectName: string, useDocker: boolean, dockerfile: string, configPath: string, useBuildkit: boolean, fcCore: any);
     private checkCustomContainerConfig;
     private buildImageWithBuildkit;
+    private buildImageWithKaniko;
     buildImage(buildInput: IBuildInput): Promise<string>;
     build(buildInput: IBuildInput): Promise<IBuildOutput>;
     private buildInBuildtkit;

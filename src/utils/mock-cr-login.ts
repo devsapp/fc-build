@@ -1,18 +1,12 @@
 import { fse, lodash } from '@serverless-devs/core';
+import { logger } from '@serverless-devs/core/dist/logger';
 import * as os from 'os';
 import path from 'path';
 
 const { ROAClient } = require('@alicloud/pop-core');
 
-async function getAuthorizationToken(region, credentials): Promise<any> {
-  const httpMethod = 'GET';
-  const uriPath = '/tokens';
-  const queries: any = {};
-  const body = '{}';
-  const headers: any = {
-    'Content-Type': 'application/json',
-  };
-  const requestOption = {};
+function getAcrClient(region, credentials) {
+  console.log(`getAcrClient: ${ JSON.stringify(credentials)} ; region: ${region}`);
   const acrClient = new ROAClient({
     accessKeyId: credentials?.AccessKeyID,
     accessKeySecret: credentials?.AccessKeySecret,
@@ -20,6 +14,19 @@ async function getAuthorizationToken(region, credentials): Promise<any> {
     endpoint: `https://cr.${region}.aliyuncs.com`,
     apiVersion: '2016-06-07',
   });
+  return acrClient;
+}
+
+async function getAuthorizationToken(region, credentials): Promise<any> {
+  const httpMethod = 'GET';
+  const uriPath = '/tokens';
+  const queries: any = {};
+  const body = '';
+  const headers: any = {
+    'Content-Type': 'application/json',
+  };
+  const requestOption = {};
+  const acrClient = getAcrClient(region, credentials);
   const response = await acrClient.request(httpMethod, uriPath, queries, body, headers, requestOption);
 
   return {
@@ -28,8 +35,56 @@ async function getAuthorizationToken(region, credentials): Promise<any> {
   };
 }
 
+async function createUserInfo(region, credentials, pwd: string): Promise<any> {
+  const httpMethod = 'PUT';
+  const uriPath = '/users';
+  const queries = {};
+  const body = JSON.stringify({
+    User: {
+      Password: pwd,
+    },
+  });
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  const requestOption = {};
+  const acrClient = getAcrClient(region, credentials);
+  await acrClient.request(httpMethod, uriPath, queries, body, headers, requestOption);
+}
+
+async function getAuthorizationTokenOfRegisrty(region, credentials): Promise<any> {
+  let response;
+  try {
+    response = await getAuthorizationToken(region, credentials);
+  } catch (e) {
+    if (
+      e.statusCode === 404 &&
+      e.result?.message === 'user is not exist.' &&
+      e.result?.code === 'USER_NOT_EXIST'
+    ) {
+      // 子账号第一次需要先设置 Regisrty 的登陆密码后才能获取登录 Registry 的临时账号和临时密码
+      // 这里默认 base64 uid:region:accessKeyID 生成一个初始密码
+      const pwd: string = Buffer.from(`${credentials.AccountID}:${region}:${credentials.AccessKeyID}`).toString('base64');
+      logger.info(`Aliyun ACR need the sub account to set password(init is ${pwd}) for logging in the registry https://cr.${region}.aliyuncs.com first if you want fc component to push image automatically`);
+      await createUserInfo(region, credentials, pwd);
+      response = await getAuthorizationToken(region, credentials);
+    } else {
+      console.log('getAuthorizationToken error');
+      throw e;
+    }
+  }
+  return response;
+}
+
+
 async function getDockerConfigInformation() {
-  const dockerConfigPath = path.join(os.homedir(), '.docker', 'config.json');
+  // https://docs.docker.com/engine/reference/commandline/cli/
+  // In general, it will use $HOME/.docker/config.json if the DOCKER_CONFIG environment variable is not specified,
+  // and use $DOCKER_CONFIG/config.json otherwise.
+  let dockerConfigPath = path.join(os.homedir(), '.docker', 'config.json');
+  if (process.env.DOCKER_CONFIG) {
+    dockerConfigPath = path.join(process.env.DOCKER_CONFIG, 'config.json');
+  }
   console.log(`dockerConfigPath: ${dockerConfigPath}`);
 
   let fileContent = {};
@@ -66,7 +121,7 @@ export async function mockDockerConfigFile(region, imageName, credentials) {
     fileContent,
     dockerConfigPath,
   } = await getDockerConfigInformation();
-  const { dockerTmpUser, dockerTmpToken } = await getAuthorizationToken(region, credentials);
+  const { dockerTmpUser, dockerTmpToken } = await getAuthorizationTokenOfRegisrty(region, credentials);
   const auth = Buffer.from(`${dockerTmpUser}:${dockerTmpToken}`).toString('base64');
 
   await setDockerConfigInformation(dockerConfigPath, fileContent, imageName.split('/')[0], auth);
