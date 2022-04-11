@@ -1,5 +1,4 @@
 export const CONTEXT = 'FC-BUILD';
-export const CONTEXT_NAME = 'fc-build';
 
 export const HELP = [
   {
@@ -54,3 +53,6 @@ export const HELP = [
     ],
   },
 ];
+
+
+export const FC_BACKEND = 'fc-backend';

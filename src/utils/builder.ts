@@ -9,10 +9,11 @@ import { execSync } from 'child_process';
 import { checkCodeUri, getExcludeFilesEnv } from './utils';
 import { generateBuildContainerBuildOpts } from './build-opts';
 import { dockerRun, resolvePasswdMount } from './docker';
-import { CONTEXT } from './constant';
+import { CONTEXT, FC_BACKEND } from './constant';
 import { IBuildInput, ICodeUri, IBuildDir } from '../interface';
 import { getFunfile, processFunfileForBuildkit } from './install-file';
 import { generateDockerfileForBuildkit } from './buildkit';
+import { mockDockerConfigFile } from './mock-cr-login';
 
 interface INeedBuild {
   baseDir: string;
@@ -38,6 +39,7 @@ export default class Builder {
   private readonly buildkitServerPort: number;
   static stages: string[] = ['install', 'build'];
   static defaultbuildkitServerPort = 65360;
+  private buildImageEnv: string;
 
   constructor(projectName: string, useDocker: boolean, dockerfile: string, configPath: string, useBuildkit: boolean, fcCore: any) {
     this.fcCore = fcCore;
@@ -78,11 +80,17 @@ export default class Builder {
         this.buildkitServerPort = buildkitServerPort || Builder.defaultbuildkitServerPort;
       }
     }
+
+    this.buildImageEnv = process.env.BUILD_IMAGE_ENV;
+    if (this.buildImageEnv === FC_BACKEND) {
+      this.useDocker = false;
+      this.useBuildkit = false;
+    }
   }
 
   private checkCustomContainerConfig(customContainerConfig: any): {dockerFileName: string; imageName: string} {
     if (_.isEmpty(customContainerConfig?.image)) {
-      const errorMessage = 'function::customContainer::image atttribute value is empty in the configuration file.';
+      const errorMessage = 'function::customContainerConfig::image atttribute value is empty in the configuration file.';
       throw new this.fcCore.CatchableError(errorMessage);
     }
 
@@ -122,6 +130,20 @@ export default class Builder {
     return imageName;
   }
 
+  private async buildImageWithKaniko(buildInput: IBuildInput): Promise<string> {
+    const { customContainerConfig } = buildInput.functionProps;
+    const { dockerFileName, imageName } = this.checkCustomContainerConfig(customContainerConfig);
+    await mockDockerConfigFile(buildInput.region, imageName, buildInput.credentials);
+    execSync(`executor  --force --snapshotMode=redo --cache=false \
+                --dockerfile ${dockerFileName} \
+                --context  ${path.dirname(dockerFileName)} \
+                --destination ${imageName} `, {
+      stdio: 'inherit',
+    });
+
+    return imageName;
+  }
+
   async buildImage(buildInput: IBuildInput): Promise<string> {
     const { customContainerConfig } = buildInput.functionProps;
     const { dockerFileName, imageName } = this.checkCustomContainerConfig(customContainerConfig);
@@ -143,15 +165,23 @@ export default class Builder {
     const isContainer = runtime === 'custom-container';
     if (useBuildkit) {
       this.logger.info('Use buildkit for building.');
-    } else if (useDocker || isContainer) {
-      await this.fcCore.preExecute?.(new Docker(), cleanUselessImage);
-      this.logger.info('Use docker for building.');
     }
-
+    if (isContainer) {
+      if (useDocker) {
+        await this.fcCore.preExecute?.(new Docker(), cleanUselessImage);
+        this.logger.info('Use docker for building.');
+      } else if (this.buildImageEnv === FC_BACKEND) {
+        this.logger.debug('Use Kaniko for building.');
+      }
+    }
     this.logger.debug(`[${this.projectName}] Runtime is ${runtime}.`);
 
     if (isContainer) {
       let image: string;
+      if (this.buildImageEnv === FC_BACKEND) {
+        image = await this.buildImageWithKaniko(buildInput);
+        return { image };
+      }
       if (this.useBuildkit) {
         image = await this.buildImageWithBuildkit(buildInput);
       } else {
