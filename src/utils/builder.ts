@@ -134,7 +134,8 @@ export default class Builder {
     const { customContainerConfig } = buildInput.functionProps;
     const { dockerFileName, imageName } = this.checkCustomContainerConfig(customContainerConfig);
     await mockDockerConfigFile(buildInput.region, imageName, buildInput.credentials);
-    execSync(`executor  --force --snapshotMode=redo --cache=false \
+    this.logger.info('start to build image ...');
+    execSync(`executor  --force --cache=false \
                 --dockerfile ${dockerFileName} \
                 --context  ${path.dirname(dockerFileName)} \
                 --destination ${imageName} `, {

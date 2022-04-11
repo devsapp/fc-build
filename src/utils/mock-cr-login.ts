@@ -2,11 +2,12 @@ import { fse, lodash } from '@serverless-devs/core';
 import { logger } from '@serverless-devs/core/dist/logger';
 import * as os from 'os';
 import path from 'path';
+import random from 'string-random';
 
 const { ROAClient } = require('@alicloud/pop-core');
 
 function getAcrClient(region, credentials) {
-  console.log(`getAcrClient: ${ JSON.stringify(credentials)} ; region: ${region}`);
+  // console.log(`getAcrClient: ${ JSON.stringify(credentials)} ; region: ${region}`);
   const acrClient = new ROAClient({
     accessKeyId: credentials?.AccessKeyID,
     accessKeySecret: credentials?.AccessKeySecret,
@@ -63,8 +64,9 @@ async function getAuthorizationTokenOfRegisrty(region, credentials): Promise<any
       e.result?.code === 'USER_NOT_EXIST'
     ) {
       // 子账号第一次需要先设置 Regisrty 的登陆密码后才能获取登录 Registry 的临时账号和临时密码
-      // 这里默认 base64 uid:region:accessKeyID 生成一个初始密码
-      const pwd: string = Buffer.from(`${credentials.AccountID}:${region}:${credentials.AccessKeyID}`).toString('base64');
+      // acr 密码要求: 8-32位，必须包含字母、符号或数字中的至少两项
+      // 这里默认 uid:region:random(4) 生成一个初始密码
+      const pwd = `${credentials.AccountID}_${random(4)}`;
       logger.info(`Aliyun ACR need the sub account to set password(init is ${pwd}) for logging in the registry https://cr.${region}.aliyuncs.com first if you want fc component to push image automatically`);
       await createUserInfo(region, credentials, pwd);
       response = await getAuthorizationToken(region, credentials);
@@ -112,7 +114,7 @@ async function setDockerConfigInformation(dockerConfigPath, fileContent, image, 
     };
   }
 
-  console.log('fileContent::: ', JSON.stringify(fileContent, null, 2));
+  // console.log('fileContent::: ', JSON.stringify(fileContent, null, 2));
   await fse.outputFile(dockerConfigPath, JSON.stringify(fileContent, null, 2));
 }
 
