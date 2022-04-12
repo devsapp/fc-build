@@ -135,12 +135,28 @@ export default class Builder {
     const { dockerFileName, imageName } = this.checkCustomContainerConfig(customContainerConfig);
     await mockDockerConfigFile(buildInput.region, imageName, buildInput.credentials);
     this.logger.info('start to build image ...');
-    execSync(`executor  --force --cache=false \
+    execSync(`executor  --force=true --cache=false --use-new-run=true \
                 --dockerfile ${dockerFileName} \
                 --context  ${path.dirname(dockerFileName)} \
                 --destination ${imageName} `, {
       stdio: 'inherit',
     });
+
+    // 单独处理下 pip install, 复用 container build image 可能会出现 skip pip install
+    // 临时 hack, 后续考虑删除下面特殊处理
+    const files = fs.readdirSync('/usr/local/lib');
+    files.forEach((name) => {
+      if (name.startsWith('python3')) {
+        const ver = parseFloat(name.substr(8));
+        if (ver > 6) {
+          console.log(`rm -rf /usr/local/lib/${name}/site-packages`);
+          execSync(`rm -rf /usr/local/lib/${name}/site-packages`);
+        }
+      }
+    });
+    // reset
+    execSync('rm -rf /usr/local/bin/python3');
+    execSync('ln -s /usr/local/bin/python3.6 /usr/local/bin/python3');
 
     return imageName;
   }
