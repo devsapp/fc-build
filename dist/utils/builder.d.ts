@@ -19,7 +19,9 @@ export default class Builder {
     private readonly useBuildkit;
     private readonly enableBuildkitServer;
     private readonly buildkitServerPort;
+    private readonly buildkitServerAddr;
     static stages: string[];
+    static defaultbuildkitServerAddr: string;
     static defaultbuildkitServerPort: number;
     private buildImageEnv;
     constructor(projectName: string, useDocker: boolean, dockerfile: string, configPath: string, useBuildkit: boolean, fcCore: any);
