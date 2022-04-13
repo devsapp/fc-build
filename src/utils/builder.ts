@@ -37,6 +37,8 @@ export default class Builder {
   private readonly useBuildkit: boolean;
   private readonly enableBuildkitServer: boolean;
   private readonly buildkitServerPort: number;
+  private readonly buildkitServerAddr: string;
+  static defaultbuildkitServerAddr = 'localhost';
   static stages: string[] = ['install', 'build'];
   static defaultbuildkitServerPort = 65360;
   private buildImageEnv: string;
@@ -52,6 +54,7 @@ export default class Builder {
     const setBuildkitArgsDefaultInBuildFC = +process.env.setBuildkitArgsDefaultInBuildFC;
     const enableBuildkitServer = +process.env.enableBuildkitServer;
     const buildkitServerPort = +process.env.buildkitServerPort;
+    const { buildkitServerAddr } = process.env;
     if (setBuildkitArgsDefaultInBuildFC) {
       this.logger.debug('set useBuildkit arg default when building function');
       this.useDocker = false;
@@ -77,6 +80,7 @@ export default class Builder {
         this.logger.warn('useBuildkit flag is set false, enableBuildkitServer environment is not working.');
         this.enableBuildkitServer = false;
       } else {
+        this.buildkitServerAddr = buildkitServerAddr || Builder.defaultbuildkitServerAddr;
         this.buildkitServerPort = buildkitServerPort || Builder.defaultbuildkitServerPort;
       }
     }
@@ -109,12 +113,14 @@ export default class Builder {
   private async buildImageWithBuildkit(buildInput: IBuildInput): Promise<string> {
     const { customContainerConfig } = buildInput.functionProps;
     const { dockerFileName, imageName } = this.checkCustomContainerConfig(customContainerConfig);
+    console.log('::::::::: ', this.enableBuildkitServer, this.buildkitServerAddr, this.buildkitServerPort);
     if (this.enableBuildkitServer) {
-      execSync(`buildctl --addr tcp://localhost:${this.buildkitServerPort} build --no-cache \
+      await mockDockerConfigFile(buildInput.region, imageName, buildInput.credentials);
+      execSync(`buildctl --addr tcp://${this.buildkitServerAddr}:${this.buildkitServerPort} build --no-cache \
             --frontend dockerfile.v0 \
             --local context=${path.dirname(dockerFileName)} \
             --local dockerfile=${path.dirname(dockerFileName)} \
-            --output type=image,name=${imageName}`, {
+            --output type=image,name=${imageName},push=true`, {
         stdio: 'inherit',
       });
     } else {
