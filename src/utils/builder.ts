@@ -113,7 +113,7 @@ export default class Builder {
   private async buildImageWithBuildkit(buildInput: IBuildInput): Promise<string> {
     const { customContainerConfig } = buildInput.functionProps;
     const { dockerFileName, imageName } = this.checkCustomContainerConfig(customContainerConfig);
-    console.log('::::::::: ', this.enableBuildkitServer, this.buildkitServerAddr, this.buildkitServerPort);
+    this.logger.debug(`enableBuildkitServer: ${this.enableBuildkitServer}, buildkitServerAddr: ${this.buildkitServerAddr}, buildkitServerPort: ${this.buildkitServerPort}`);
     if (this.enableBuildkitServer) {
       await mockDockerConfigFile(buildInput.region, imageName, buildInput.credentials);
       execSync(`buildctl --addr tcp://${this.buildkitServerAddr}:${this.buildkitServerPort} build --no-cache \
