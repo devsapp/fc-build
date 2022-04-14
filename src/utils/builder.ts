@@ -152,11 +152,18 @@ export default class Builder {
           console.log(`rm -rf /usr/local/lib/${name}/site-packages`);
           execSync(`rm -rf /usr/local/lib/${name}/site-packages`);
         }
+      } else if (name.startsWith('python2')) {
+        console.log(`rm -rf /usr/local/lib/${name}/site-packages`);
+        execSync(`rm -rf /usr/local/lib/${name}/site-packages`);
+        execSync(`rm /usr/local/bin/pip${name.substr(6)}`);
+        execSync('rm /usr/local/bin/pip2');
       }
     });
     // reset
     execSync('rm -rf /usr/local/bin/python3');
     execSync('ln -s /usr/local/bin/python3.6 /usr/local/bin/python3');
+    execSync('rm -rf /usr/local/bin/python');
+    execSync('ln -s /usr/local/bin/python3 /usr/local/bin/python');
 
     return imageName;
   }
