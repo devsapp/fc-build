@@ -7,7 +7,6 @@ import random from 'string-random';
 const { ROAClient } = require('@alicloud/pop-core');
 
 function getAcrClient(region, credentials) {
-  // console.log(`getAcrClient: ${ JSON.stringify(credentials)} ; region: ${region}`);
   const acrClient = new ROAClient({
     accessKeyId: credentials?.AccessKeyID,
     accessKeySecret: credentials?.AccessKeySecret,
@@ -71,7 +70,7 @@ async function getAuthorizationTokenOfRegisrty(region, credentials): Promise<any
       await createUserInfo(region, credentials, pwd);
       response = await getAuthorizationToken(region, credentials);
     } else {
-      console.log('getAuthorizationToken error');
+      logger.debug('getAuthorizationToken error');
       throw e;
     }
   }
@@ -87,7 +86,7 @@ async function getDockerConfigInformation() {
   if (process.env.DOCKER_CONFIG) {
     dockerConfigPath = path.join(process.env.DOCKER_CONFIG, 'config.json');
   }
-  console.log(`dockerConfigPath: ${dockerConfigPath}`);
+  logger.debug(`dockerConfigPath: ${dockerConfigPath}`);
 
   let fileContent = {};
   try {
@@ -114,7 +113,6 @@ async function setDockerConfigInformation(dockerConfigPath, fileContent, image, 
     };
   }
 
-  // console.log('fileContent::: ', JSON.stringify(fileContent, null, 2));
   await fse.outputFile(dockerConfigPath, JSON.stringify(fileContent, null, 2));
 }
 
