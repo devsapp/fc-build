@@ -19,6 +19,8 @@ export default class Builder {
     private readonly useBuildkit;
     private readonly enableBuildkitServer;
     private readonly buildkitServerPort;
+    private readonly buildkitServerAddr;
+    static defaultbuildkitServerAddr: string;
     static stages: string[];
     static defaultbuildkitServerPort: number;
     private buildImageEnv;
