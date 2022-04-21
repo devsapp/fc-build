@@ -37,11 +37,11 @@ If you have a requirement, you can submit the issue at https://github.com/devsap
       const runtimeOfFunfile = runtimeArgs[0].getValue();
 
       if (runtimeOfFunfile !== runtime) {
-        logger.warning(`\nDetectionWarning: The 'runtime' of '${serviceName}/${functionName}' in your yml is inconsistent with that in Funfile.`);
+        logger.warn(`\nDetectionWarning: The 'runtime' of '${serviceName}/${functionName}' in your yml is inconsistent with that in Funfile.`);
       }
 
       const imageName = await resolveRuntimeToDockerImage(runtimeOfFunfile);
-      dockerfile.push(`FROM ${ imageName } as ${runtimeOfFunfile}`);
+      dockerfile.push(`FROM ${imageName} as ${runtimeOfFunfile}`);
     } else {
       const range = instruction.getRange();
       // @ts-ignore: .

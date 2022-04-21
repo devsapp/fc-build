@@ -1,9 +1,8 @@
-import { Logger } from '@serverless-devs/core';
-import { CONTEXT } from './constant';
 import _ from 'lodash';
 import path from 'path';
 import readline from 'readline';
 import fs from 'fs-extra';
+import logger from '../common/logger';
 
 import { ICodeUri, IObject } from '../interface';
 
@@ -30,12 +29,12 @@ export function checkCodeUri(codeUri: string | ICodeUri): string {
   const src = _.isString(codeUri) ? codeUri : codeUri.src;
 
   if (!src) {
-    Logger.info(CONTEXT, 'No Src configured, skip building.');
+    logger.info('No Src configured, skip building.');
     return '';
   }
 
   if (_.endsWith(src, '.zip') || _.endsWith(src, '.jar') || _.endsWith(src, '.war')) {
-    Logger.info(CONTEXT, 'Artifact configured, skip building.');
+    logger.info('Artifact configured, skip building.');
     return '';
   }
   return src;

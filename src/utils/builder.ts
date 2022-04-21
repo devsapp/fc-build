@@ -1,4 +1,3 @@
-import { HLogger, ILogger } from '@serverless-devs/core';
 import Docker from 'dockerode';
 import fs from 'fs-extra';
 import path from 'path';
@@ -9,11 +8,12 @@ import { execSync } from 'child_process';
 import { checkCodeUri, getExcludeFilesEnv } from './utils';
 import { generateBuildContainerBuildOpts } from './build-opts';
 import { dockerRun, resolvePasswdMount } from './docker';
-import { CONTEXT, FC_BACKEND } from './constant';
+import { FC_BACKEND } from './constant';
 import { IBuildInput, ICodeUri, IBuildDir } from '../interface';
 import { getFunfile, processFunfileForBuildkit } from './install-file';
 import { generateDockerfileForBuildkit } from './buildkit';
 import { mockDockerConfigFile } from './mock-cr-login';
+import logger from '../common/logger';
 
 interface INeedBuild {
   baseDir: string;
@@ -27,7 +27,7 @@ interface IBuildOutput {
 }
 
 export default class Builder {
-  @HLogger(CONTEXT) logger: ILogger;
+  logger = logger;
 
   private readonly useDocker: boolean;
   private dockerfile: string;

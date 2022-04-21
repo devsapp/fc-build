@@ -1,11 +1,11 @@
 import { commandParse, help, loadComponent, getCredential, CatchableError } from '@serverless-devs/core';
 import Builder from './utils/builder';
 import { IInputs, IBuildInput } from './interface';
-import { CONTEXT, HELP, FC_BACKEND } from './utils/constant';
-import Logger from './common/logger';
-import { logger } from '@serverless-devs/core/dist/logger';
+import { HELP, FC_BACKEND } from './utils/constant';
+import logger from './common/logger';
+import { startSboxContainer } from './utils/docker';
+import { generateSboxOpts } from './utils/build-opts';
 
-Logger.setContent(CONTEXT);
 interface IOutput {
   props: any;
   image?: string;
@@ -14,13 +14,13 @@ interface IOutput {
 
 export default class Build {
   async build(inputs: IInputs) {
-    Logger.info('Build artifact start...');
+    logger.info('Build artifact start...');
     const projectName = inputs.project?.projectName;
-    Logger.debug(`[${projectName}]inputs params: ${JSON.stringify(inputs.props)}`);
+    logger.debug(`[${projectName}]inputs params: ${JSON.stringify(inputs.props)}`);
 
     const apts = {
       string: ['dockerfile', '--custom-env', '--custom-args'],
-      boolean: ['help', 'use-docker', 'use-buildkit', 'clean-useless-image'],
+      boolean: ['help', 'use-sandbox', 'use-docker', 'use-buildkit', 'clean-useless-image'],
       alias: { dockerfile: 'f', 'use-docker': 'd', help: 'h' },
     };
     const argsData: any = commandParse(inputs, apts).data || {};
@@ -32,6 +32,7 @@ export default class Build {
       'clean-useless-image': cleanUselessImage,
       'custom-env': customEnv,
       'custom-args': customArgs,
+      'use-sandbox': useSandbox,
     } = argsData;
     const useKaniko: boolean = process.env.BUILD_IMAGE_ENV === FC_BACKEND;
 
@@ -75,6 +76,10 @@ export default class Build {
         SecurityToken: '',
       },
     };
+    if (useSandbox) {
+      const opts = await generateSboxOpts(params, inputs?.path?.configPath);
+      return await startSboxContainer(opts);
+    }
     if (useBuildkit || useKaniko) {
       logger.debug(`params add credentials becase useBuildkit=${useBuildkit} or useKaniko=${useKaniko}`);
       params.credentials = inputs.credentials?.AccountID ? inputs.credentials : await getCredential(inputs.project?.access);
@@ -87,14 +92,14 @@ export default class Build {
     };
 
     const buildOutput = await builder.build(params);
-    Logger.debug(`[${projectName}] Build output: ${JSON.stringify(buildOutput)}`);
+    logger.debug(`[${projectName}] Build output: ${JSON.stringify(buildOutput)}`);
     if (buildOutput.buildSaveUri) {
       output.buildSaveUri = buildOutput.buildSaveUri;
     } else {
       output.image = buildOutput.image;
     }
 
-    Logger.info('Build artifact successfully.');
+    logger.info('Build artifact successfully.');
     await fcCore.setBuildState(serviceName, functionName, '', { status: 'available' });
     return output;
   }

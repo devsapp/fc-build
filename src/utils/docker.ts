@@ -1,15 +1,15 @@
-import { Logger, spinner, loadComponent } from '@serverless-devs/core';
+import { spinner, loadComponent } from '@serverless-devs/core';
 import _ from 'lodash';
 import fs from 'fs-extra';
 import tar from 'tar-fs';
 import path from 'path';
 import Docker from 'dockerode';
 import DraftLog from 'draftlog';
+import logger from '../common/logger';
 import generatePwdFile from './passwd';
 import findPathsOutofSharedPaths from './docker-support';
 import { resolveLibPathsFromLdConf, checkCodeUri, getExcludeFilesEnv, isDebug } from './utils';
 import { addEnv } from './env';
-import { CONTEXT } from './constant';
 import { IServiceProps, IFunctionProps, IObject, ICredentials } from '../interface';
 
 DraftLog.into(console);
@@ -41,8 +41,7 @@ function generateFunctionEnvs(functionProps: IFunctionProps): IObject {
 async function createContainer(opts): Promise<any> {
   const isMac = process.platform === 'darwin';
 
-  Logger.debug(CONTEXT, `Operating platform: ${process.platform}`);
-
+  logger.debug(`Operating platform: ${process.platform}`);
   if (opts && isMac) {
     if (opts.HostConfig) {
       const pathsOutofSharedPaths = await findPathsOutofSharedPaths(opts.HostConfig.Mounts);
@@ -75,7 +74,7 @@ async function createContainer(opts): Promise<any> {
 
 async function isDockerToolBoxAndEnsureDockerVersion(): Promise<boolean> {
   const dockerInfo = await docker.info();
-  Logger.debug(CONTEXT, `Docker info: ${JSON.stringify(dockerInfo)}`);
+  logger.debug(`Docker info: ${JSON.stringify(dockerInfo)}`);
 
   await detectDockerVersion(dockerInfo.ServerVersion || '');
 
@@ -277,7 +276,7 @@ export async function dockerRun(opts: any): Promise<any> {
   const exitRs = await container.wait();
   vm?.stop();
 
-  Logger.debug(CONTEXT, `Container wait: ${JSON.stringify(exitRs)} `);
+  logger.debug(`Container wait: ${JSON.stringify(exitRs)} `);
 
   containers.delete(container.id);
 
@@ -341,7 +340,6 @@ export async function generateDockerfileEnvs(credentials: ICredentials, region: 
   return DockerfilEnvs;
 }
 
-
 export async function copyFromImage(imageName, from, to) {
   const container = await docker.createContainer({
     Image: imageName,
@@ -354,4 +352,191 @@ export async function copyFromImage(imageName, from, to) {
   await zipTo(archive, to);
 
   await container.remove();
+}
+
+// exit container, when use ctrl + c
+function waitingForContainerStopped(): any {
+  // see https://stackoverflow.com/questions/10021373/what-is-the-windows-equivalent-of-process-onsigint-in-node-js
+  // @ts-ignore
+  const isRaw = process.isRaw;
+  const kpCallBack: any = (_char, key) => {
+    if (key & key.ctrl && key.name === 'c') {
+      // @ts-ignore
+      process.emit('SIGINT');
+    }
+  };
+  if (process.platform === 'win32') {
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(isRaw);
+    }
+    process.stdin.on('keypress', kpCallBack);
+  }
+
+  let stopping: boolean = false;
+
+  process.on('SIGINT', async () => {
+    logger.debug(`containers size: ${containers?.size}`);
+
+    if (stopping) {
+      return;
+    }
+
+    // Just fix test on windows
+    // Because process.emit('SIGINT') in test/docker.test.js will not trigger rl.on('SIGINT')
+    // And when listening to stdin the process never finishes until you send a SIGINT signal explicitly.
+    process.stdin.destroy();
+
+    if (!containers.size) {
+      return;
+    }
+
+    stopping = true;
+
+    logger.info(`\nReceived canncel request, stopping running containers.....`);
+
+    const jobs: Array<any> = [];
+    const c: Array<any> = Array.from(containers);
+    for (let container of c) {
+      try {
+        if (container.destroy) { // container stream
+          container.destroy();
+        } else {
+          const c: any = docker.getContainer(container);
+          logger.info(`Stopping container ${container}`);
+
+          jobs.push(c.kill().catch(ex => logger.debug(`kill container instance error, error is ${ex}`)));
+        }
+      } catch (error) {
+        logger.debug(`get container instance error, ignore container to stop, error is ${error}`);
+      }
+    }
+
+    try {
+      await Promise.all(jobs);
+      logger.info('All containers stopped');
+      // 修复Ctrl C 后容器退出，但是程序会 block 住的问题
+      process.exit(0);
+    } catch (error) {
+      logger.error(error);
+      process.exit(-1); // eslint-disable-line
+    }
+  });
+
+  return () => {
+    process.stdin.removeListener('keypress', kpCallBack);
+    if (process.stdin.isTTY) {
+      process.stdin?.setRawMode(isRaw);
+    }
+  };
+};
+
+function displaySboxTips() {
+  logger.log(`\nWelcom to s sbox environment.`, 'yellow');
+  logger.log(`=======需要补充一些代码提示=====\n`, 'yellow');
+}
+
+export async function startSboxContainer(opts) {
+  const { OpenStdin: isInteractive, Tty: isTty } = opts;
+  // console.log('opts:: ', opts.Env);
+  const container = await createContainer(opts);
+  containers.add(container.id);
+  await container.start();
+
+  const stream = await container.attach({
+    logs: true,
+    stream: true,
+    stdin: isInteractive,
+    stdout: true,
+    stderr: true
+  });
+
+  // show outputs
+  let logStream;
+  if (isTty) {
+    stream.pipe(process.stdout);
+  } else {
+    if (isInteractive || process.platform === 'win32') {
+      // 这种情况很诡异，收不到 stream 的 stdout，使用 log 绕过去。
+      logStream = await container.logs({
+        stdout: true,
+        stderr: true,
+        follow: true
+      });
+      container.modem.demuxStream(logStream, process.stdout, process.stderr);
+    } else {
+      container.modem.demuxStream(stream, process.stdout, process.stderr);
+    }
+  }
+
+  if (isInteractive) {
+    displaySboxTips();
+
+    // Connect stdin
+    process.stdin.pipe(stream);
+
+    let previousKey;
+    const CTRL_P = '\u0010', CTRL_Q = '\u0011';
+
+    process.stdin.on('data', (key) => {
+      // Detects it is detaching a running container
+      const keyStr = key.toString('ascii');
+      if (previousKey === CTRL_P && keyStr === CTRL_Q) {
+        container.stop(() => { });
+      }
+      previousKey = keyStr;
+    });
+
+  }
+
+  let resize;
+
+  // @ts-ignore
+  const { isRaw } = process;
+  const goThrough = waitingForContainerStopped();
+  if (isTty) {
+    goThrough();
+
+    process.stdin.setRawMode(true);
+
+    resize = async () => {
+      const dimensions = {
+        h: process.stdout.rows,
+        w: process.stdout.columns
+      };
+
+      if (dimensions.h !== 0 && dimensions.w !== 0) {
+        await container.resize(dimensions);
+      }
+    };
+
+    await resize();
+    process.stdout.on('resize', resize);
+
+    // 在不加任何 cmd 的情况下 shell prompt 需要输出一些字符才会显示，
+    // 这里输入一个空格+退格，绕过这个怪异的问题。
+    stream.write(' \b');
+  }
+
+  await container.wait();
+
+  // cleanup
+  if (isTty) {
+    process.stdout.removeListener('resize', resize);
+    process.stdin.setRawMode(isRaw);
+  }
+  if (isInteractive) {
+    process.stdin.removeAllListeners();
+    process.stdin.unpipe(stream);
+    process.stdin.destroy();
+  }
+  if (logStream) {
+    logStream.removeAllListeners();
+  }
+  stream.unpipe(process.stdout);
+  stream.destroy();
+
+  containers.delete(container.id);
+  if (!isTty) {
+    goThrough();
+  }
 }
