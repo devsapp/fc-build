@@ -20,6 +20,7 @@ export interface IBuildInput {
   region?: string;
   credentials?: ICredentials;
   cleanUselessImage?: Boolean;
+  userCustomConfig?: any;
 }
 
 export interface IProperties {

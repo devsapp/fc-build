@@ -8,7 +8,7 @@ import * as _ from 'lodash';
 import generatePwdFile from './passwd';
 import { resolveRuntimeToDockerImage } from './get-image-name';
 
-export async function formatDockerfileForBuildkit(dockerfilePath: string, fromSrcToDstPairs: Array<{src: string; dst: string}>, baseDir: string, targetBuildStage: string) {
+export async function formatDockerfileForBuildkit(dockerfilePath: string, fromSrcToDstPairs: Array<{ src: string; dst: string }>, baseDir: string, targetBuildStage: string) {
   if (!fromSrcToDstPairs) {
     logger.debug('There are no fromSrcToDstPairs');
     return;
@@ -18,7 +18,7 @@ export async function formatDockerfileForBuildkit(dockerfilePath: string, fromSr
   await fs.writeFile(dockerfilePath, dockerfileContent);
 }
 
-async function convertDockerfileToBuildkitFormat(dockerfilePath: string, fromSrcToDstPairs: Array<{src: string; dst: string}>, baseDir: string, targetBuildStage: string) {
+async function convertDockerfileToBuildkitFormat(dockerfilePath: string, fromSrcToDstPairs: Array<{ src: string; dst: string }>, baseDir: string, targetBuildStage: string) {
   const originalContent = await fs.readFile(dockerfilePath, 'utf8');
   if (!targetBuildStage || !fromSrcToDstPairs) {
     logger.debug('There is no output args.');
@@ -64,11 +64,12 @@ async function resolvePasswdMount(contentDir) {
   return null;
 }
 
-export async function generateDockerfileForBuildkit(credentials: ICredentials, region, dockerfilePath: string, serviceConfig: IServiceProps, functionConfig: IFunctionProps, baseDir: string, codeUri: string, funcArtifactDir: string, verbose: any, stages: string[], targetBuildStage: string) {
+export async function generateDockerfileForBuildkit(credentials: ICredentials, region, dockerfilePath: string, serviceConfig: IServiceProps, functionConfig: IFunctionProps, baseDir: string, codeUri: string, funcArtifactDir: string, verbose: any, stages: string[], targetBuildStage: string, userCustomConfig) {
   logger.log('Generating dockerfile in buildkit format.');
   const { runtime } = functionConfig;
+  const { customEnv, additionalArgs } = userCustomConfig || {};
 
-  const envs = await generateDockerfileEnvs(credentials, region, baseDir, serviceConfig, functionConfig);
+  const envs = await generateDockerfileEnvs(credentials, region, baseDir, serviceConfig, functionConfig, customEnv);
 
   const codeMount = await resolveCodeUriToMount(path.resolve(baseDir, codeUri), false);
 
@@ -95,6 +96,7 @@ export async function generateDockerfileForBuildkit(credentials: ICredentials, r
     artifactDir: codeUri === funcArtifactDir ? '/code' : funcArtifactMountDir,
     stages,
     verbose,
+    otherPayload: { additionalArgs }
   };
 
   const cmd = `fun-install build --json-params '${JSON.stringify(params)}'`;
@@ -120,7 +122,7 @@ async function dockerfileForBuildkit(runtime: string, fromSrcToDstPairsInOutput:
   const image = await resolveRuntimeToDockerImage(runtime);
 
   const content = [];
-  content.push(`FROM ${ image } as ${runtime}`);
+  content.push(`FROM ${image} as ${runtime}`);
   if (workdir) {
     content.push(`WORKDIR ${workdir}`);
   }

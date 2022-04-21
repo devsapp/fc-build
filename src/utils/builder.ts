@@ -92,7 +92,7 @@ export default class Builder {
     }
   }
 
-  private checkCustomContainerConfig(customContainerConfig: any): {dockerFileName: string; imageName: string} {
+  private checkCustomContainerConfig(customContainerConfig: any): { dockerFileName: string; imageName: string } {
     if (_.isEmpty(customContainerConfig?.image)) {
       const errorMessage = 'function::customContainerConfig::image atttribute value is empty in the configuration file.';
       throw new this.fcCore.CatchableError(errorMessage);
@@ -259,6 +259,7 @@ export default class Builder {
     functionProps,
     verbose = true,
     credentials,
+    userCustomConfig,
   }: IBuildInput, baseDir: string, codeUri: string, funcArtifactDir: string, funfilePath: string): Promise<void> {
     if (funfilePath) {
       await processFunfileForBuildkit(serviceProps, codeUri, funfilePath, baseDir, funcArtifactDir, functionProps.runtime, functionName, this.enableBuildkitServer, this.buildkitServerPort);
@@ -272,19 +273,20 @@ export default class Builder {
       funcArtifactDir,
       verbose,
       Builder.stages,
-      targetBuildStage);
+      targetBuildStage,
+      userCustomConfig);
     // exec build
     if (this.enableBuildkitServer) {
       execSync(
         `buildctl --addr tcp://localhost:${this.buildkitServerPort} build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(dockerfilePath)} --opt filename=${path.basename(dockerfilePath)} --opt target=${targetBuildStage} --output type=local,dest=${baseDir}`, {
-          stdio: 'inherit',
-        },
+        stdio: 'inherit',
+      },
       );
     } else {
       execSync(
         `buildctl build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(dockerfilePath)} --opt filename=${path.basename(dockerfilePath)} --opt target=${targetBuildStage} --output type=local,dest=${baseDir}`, {
-          stdio: 'inherit',
-        },
+        stdio: 'inherit',
+      },
       );
     }
 
@@ -313,6 +315,7 @@ export default class Builder {
     functionProps,
     verbose = true,
     credentials,
+    userCustomConfig,
   }: IBuildInput, baseDir: string, codeUri: string, funcArtifactDir: string): Promise<void> {
     const opts = await generateBuildContainerBuildOpts({
       region,
@@ -326,6 +329,7 @@ export default class Builder {
       verbose,
       credentials,
       stages: Builder.stages,
+      userCustomConfig,
     });
 
     this.logger.debug(
@@ -334,7 +338,7 @@ export default class Builder {
 
     const usedImage = opts.Image;
 
-    this.logger.info(`Build function using image: ${ usedImage}`);
+    this.logger.info(`Build function using image: ${usedImage}`);
 
     const exitRs = await dockerRun(opts);
     if (exitRs.StatusCode !== 0) {
@@ -344,18 +348,17 @@ export default class Builder {
   }
 
   async buildArtifact(
-    { serviceName, functionName, functionProps, verbose = true }: IBuildInput,
+    { serviceName, functionName, functionProps, verbose = true, userCustomConfig }: IBuildInput,
     _baseDir: string, codeUri: string, funcArtifactDir: string,
   ): Promise<void> {
-    process.env.BUILD_EXCLIUDE_FILES = getExcludeFilesEnv();
-    process.env.TOOL_CACHE_PATH = '.s';
-
     const { runtime } = functionProps;
     const [result, details] = await this.fcCore.checkLanguage(runtime);
     if (!result && details) {
       throw new this.fcCore.CatchableError(details);
     }
 
+    process.env.BUILD_EXCLIUDE_FILES = getExcludeFilesEnv();
+    process.env.TOOL_CACHE_PATH = '.s';
     if (this.fcCore.isInterpretedLanguage(runtime, codeUri)) {
       process.env.ONLY_CPOY_MANIFEST_FILE = 'true';
     }

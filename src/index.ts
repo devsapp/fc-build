@@ -1,4 +1,4 @@
-import { commandParse, help, loadComponent, getCredential } from '@serverless-devs/core';
+import { commandParse, help, loadComponent, getCredential, CatchableError } from '@serverless-devs/core';
 import Builder from './utils/builder';
 import { IInputs, IBuildInput } from './interface';
 import { CONTEXT, HELP, FC_BACKEND } from './utils/constant';
@@ -19,20 +19,32 @@ export default class Build {
     Logger.debug(`[${projectName}]inputs params: ${JSON.stringify(inputs.props)}`);
 
     const apts = {
-      string: ['dockerfile'],
+      string: ['dockerfile', '--custom-env', '--custom-args'],
       boolean: ['help', 'use-docker', 'use-buildkit', 'clean-useless-image'],
       alias: { dockerfile: 'f', 'use-docker': 'd', help: 'h' },
     };
     const argsData: any = commandParse(inputs, apts).data || {};
-    const { dockerfile = '', h }: any = argsData;
-    const useBuildkit: boolean = argsData['use-buildkit'];
-    const useDocker: boolean = argsData['use-docker'];
-    const cleanUselessImage = argsData['clean-useless-image'];
+    const {
+      h,
+      dockerfile = '',
+      'use-buildkit': useBuildkit,
+      'use-docker': useDocker,
+      'clean-useless-image': cleanUselessImage,
+      'custom-env': customEnv,
+      'custom-args': customArgs,
+    } = argsData;
     const useKaniko: boolean = process.env.BUILD_IMAGE_ENV === FC_BACKEND;
 
     if (h) {
       help(HELP);
       return;
+    }
+    if (customEnv) {
+      try {
+        JSON.parse(customEnv);
+      } catch (_ex) {
+        throw new CatchableError(`The parameter passed in by --custom-env is not a standard JSON format: ${customEnv}`);
+      }
     }
 
     const { region, service: serviceProps, function: functionProps } = inputs.props;
@@ -50,6 +62,10 @@ export default class Build {
       serviceProps,
       functionProps,
       serviceName,
+      userCustomConfig: {
+        customEnv: customEnv ? JSON.parse(customEnv) : undefined,
+        additionalArgs: customArgs ? customArgs.split(' ') : [],
+      },
       cleanUselessImage,
       functionName,
       credentials: { // buildkit 需要密钥信息

@@ -116,13 +116,13 @@ function followProgress(stream, onFinished) {
         // @ts-ignore: 引入 draftlog 注入的方法
         barLines[id] = console.draft();
       }
-      barLines[id](`${id }: ${ status}`);
+      barLines[id](`${id}: ${status}`);
     } else {
       if (_.has(event, 'aux.ID')) {
-        event.stream = `${event.aux.ID }\n`;
+        event.stream = `${event.aux.ID}\n`;
       }
       // If there is no id, the line should be wrapped manually.
-      const out = event.status ? `${event.status }\n` : event.stream;
+      const out = event.status ? `${event.status}\n` : event.stream;
       process.stdout.write(out);
     }
   };
@@ -142,7 +142,7 @@ export async function generateDockerEnvs({
   serviceProps,
   functionName,
   functionProps,
-}: IDockerEnvs) {
+}: IDockerEnvs, userCustomEnv) {
   const envs: IObject = {};
 
   const { runtime, codeUri } = functionProps;
@@ -159,6 +159,10 @@ export async function generateDockerEnvs({
 
   Object.assign(envs, confEnv);
   Object.assign(envs, generateFunctionEnvs(functionProps));
+
+  if (userCustomEnv) {
+    Object.assign(envs, userCustomEnv);
+  }
   Object.assign(envs, {
     ONLY_CPOY_MANIFEST_FILE,
     local: true,
@@ -318,7 +322,7 @@ async function zipTo(archive, to) {
   });
 }
 
-export async function generateDockerfileEnvs(credentials: ICredentials, region: string, baseDir: string, serviceProps: IServiceProps, functionProps: IFunctionProps) {
+export async function generateDockerfileEnvs(credentials: ICredentials, region: string, baseDir: string, serviceProps: IServiceProps, functionProps: IFunctionProps, customEnv) {
   const serviceName: string = serviceProps.name;
   const functionName: string = functionProps.name;
   const DockerEnvs = await generateDockerEnvs({
@@ -329,7 +333,7 @@ export async function generateDockerfileEnvs(credentials: ICredentials, region: 
     serviceProps,
     functionName,
     functionProps,
-  });
+  }, customEnv);
   const DockerfilEnvs = [];
   Object.keys(DockerEnvs).forEach((key) => {
     DockerfilEnvs.push(`${key}=${DockerEnvs[key]}`);

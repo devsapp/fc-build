@@ -19,6 +19,7 @@ interface IBuildOpts {
   verbose: boolean;
   stages: string[];
   credentials: ICredentials;
+  userCustomConfig?: any;
 }
 
 export async function generateBuildContainerBuildOpts({
@@ -33,8 +34,10 @@ export async function generateBuildContainerBuildOpts({
   funcArtifactDir,
   verbose,
   stages,
+  userCustomConfig,
 }: IBuildOpts): Promise<any> {
   const { runtime } = functionProps;
+  const { additionalArgs, customEnv } = userCustomConfig;
 
   const containerName = docker.generateRamdomContainerName();
 
@@ -47,7 +50,7 @@ export async function generateBuildContainerBuildOpts({
     functionName,
     credentials,
     functionProps,
-  });
+  }, customEnv);
 
   const codeMount = await docker.resolveCodeUriToMount(path.resolve(baseDir, codeUri), false);
 
@@ -61,8 +64,14 @@ export async function generateBuildContainerBuildOpts({
     Target: funcArtifactMountDir,
     ReadOnly: false,
   };
+  const testInstall = {
+    Type: 'bind',
+    Source: '/Users/wb447188/Desktop/fc-builders/output/fun-install',
+    Target: '/usr/local/bin/fun-install',
+    ReadOnly: false,
+  };
 
-  const mounts = _.compact([codeMount, artifactDirMount, passwdMount]);
+  const mounts = _.compact([codeMount, artifactDirMount, testInstall, passwdMount]);
 
   const params = {
     method: 'build',
@@ -73,6 +82,7 @@ export async function generateBuildContainerBuildOpts({
     artifactDir: codeUri === funcArtifactDir ? '/code' : funcArtifactMountDir,
     stages,
     verbose,
+    otherPayload: { additionalArgs }
   };
 
   const cmd = ['fun-install', 'build', '--json-params', JSON.stringify(params)];
