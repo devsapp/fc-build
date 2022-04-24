@@ -1,5 +1,6 @@
 import _ from 'lodash';
 import path from 'path';
+import rimraf from 'rimraf';
 import readline from 'readline';
 import fs from 'fs-extra';
 import logger from '../common/logger';
@@ -97,4 +98,20 @@ export async function resolveLibPathsFromLdConf(
     envs.LD_LIBRARY_PATH = libPaths.map((p) => `/code/.s/root${p}`).join(':');
   }
   return envs;
+}
+
+export async function removeBuildCache(fcCore, baseDir, serviceName, functionName) {
+  const artifactPath = fcCore.getBuildArtifactPath(baseDir, serviceName, functionName);
+  try {
+    if (fs.pathExistsSync(artifactPath)) {
+      await new Promise((resolve) => {
+        rimraf(artifactPath, (err) => resolve(''));
+      });
+    }
+  } catch (_ex) { /** 如果异常不阻塞主进程运行 */ }
+
+  try {
+    const buildFilesListJSONPath = fcCore.genBuildLinkFilesListJSONPath(baseDir, serviceName, functionName);
+    await fs.remove(buildFilesListJSONPath);
+  } catch (_ex) { /** 如果异常不阻塞主进程运行 */ }
 }

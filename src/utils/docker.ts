@@ -430,9 +430,11 @@ function waitingForContainerStopped(): any {
   };
 };
 
-function displaySboxTips() {
+export function displaySboxTips(codeUri) {
   logger.log(`\nWelcom to s sbox environment.`, 'yellow');
-  logger.log(`=======需要补充一些代码提示=====\n`, 'yellow');
+  logger.log(`1. The local mount directory is ${codeUri}, The container instance mount directory is /code
+2. It is recommended to install the dependency into the /code directory of the instance to ensure that relevant products can be obtained after the build operation
+3. Some NPM packages will cache some information for the system version. It is recommended to add the parameter [--no-shrinkwrap] when using [npm install]\n`, 'yellow');
 }
 
 export async function startSboxContainer(opts) {
@@ -469,8 +471,6 @@ export async function startSboxContainer(opts) {
   }
 
   if (isInteractive) {
-    displaySboxTips();
-
     // Connect stdin
     process.stdin.pipe(stream);
 

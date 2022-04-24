@@ -7,6 +7,7 @@ import { resolveRuntimeToDockerImage } from './get-image-name';
 import { processFunfile, getFunfile } from './install-file';
 import { addEnv } from './env';
 import logger from '../common/logger';
+import { checkCodeUri } from './utils';
 
 interface IBuildOpts {
   region: string;
@@ -25,7 +26,7 @@ interface IBuildOpts {
 
 const funcArtifactMountDir = '/artifactsMount';
 
-export async function generateMounts(absCodeUri, funcArtifactDir) {
+async function generateMounts(absCodeUri, funcArtifactDir) {
   const codeMount = await docker.resolveCodeUriToMount(absCodeUri, false);
 
   const passwdMount = await docker.resolvePasswdMount();
@@ -109,10 +110,10 @@ export async function generateBuildContainerBuildOpts({
   return opts;
 }
 
-export async function generateSboxOpts(payload, configPath) {
-  let { imageName, customEnv, additionalArgs } = payload.userCustomConfig;
+export async function generateSboxOpts(payload, dockerPayload, baseDir) {
+  let { imageName, customEnv } = payload.userCustomConfig;
   const { runtime, codeUri, environmentVariables } = payload.functionProps;
-  const isInteractive = true;
+  const isInteractive = dockerPayload.useSandbox || false;
   const isTty = isInteractive && process.stdin.isTTY || false;;
 
   if (!imageName) {
@@ -122,18 +123,31 @@ export async function generateSboxOpts(payload, configPath) {
     }
   }
 
-  const baseDir = configPath ? path.dirname(configPath) : process.cwd();;
-  const codeResolvePath = path.resolve(baseDir, codeUri);
+  const src = checkCodeUri(codeUri);
+  if (!src) {
+    return {};
+  }
+  const codeResolvePath = path.resolve(baseDir, src);
 
-  const cmd = _.isEmpty(additionalArgs) ? [] : additionalArgs;
+  const params = { // 执行自定义
+    method: 'build',
+    otherPayload: dockerPayload,
+  };
+  const cmd = isInteractive ? ['/bin/bash'] : ['fun-install', 'build', '--json-params', JSON.stringify(params)];
+
+  docker.displaySboxTips(codeResolvePath);
   const mounts = await generateMounts(codeResolvePath, codeResolvePath);
   const envs = _.assign({}, Object.assign(environmentVariables || {}, customEnv || {}));
-  envs.S_SANDBOX = 's_sandbox'; // 控制 sandbox 显示
+
+  if (isInteractive) {
+    envs.S_SANDBOX = 's_sandbox'; // 控制 s-install
+  }
 
   logger.debug(`runtime: ${runtime}`);
   logger.debug(`mounts: ${mounts}`);
   logger.debug(`isTty: ${isTty}`);
   logger.debug(`isInteractive: ${isInteractive}`);
+  logger.debug(`isInteractive: ${cmd}`);
 
   return {
     Image: imageName,

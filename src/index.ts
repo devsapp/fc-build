@@ -5,6 +5,9 @@ import { HELP, FC_BACKEND } from './utils/constant';
 import logger from './common/logger';
 import { startSboxContainer } from './utils/docker';
 import { generateSboxOpts } from './utils/build-opts';
+import path from 'path';
+import { removeBuildCache } from './utils/utils';
+import _ from 'lodash';
 
 interface IOutput {
   props: any;
@@ -33,6 +36,8 @@ export default class Build {
       'custom-env': customEnv,
       'custom-args': customArgs,
       'use-sandbox': useSandbox,
+      command,
+      'script-file': scriptFile,
     } = argsData;
     const useKaniko: boolean = process.env.BUILD_IMAGE_ENV === FC_BACKEND;
 
@@ -50,6 +55,7 @@ export default class Build {
 
     const { region, service: serviceProps, function: functionProps } = inputs.props;
     const { runtime } = functionProps;
+    const configPath = inputs?.path?.configPath;
 
     const fcCore = await loadComponent('devsapp/fc-core');
     if (!runtime) {
@@ -76,27 +82,32 @@ export default class Build {
         SecurityToken: '',
       },
     };
-    if (useSandbox) {
-      const opts = await generateSboxOpts(params, inputs?.path?.configPath);
-      return await startSboxContainer(opts);
-    }
     if (useBuildkit || useKaniko) {
       logger.debug(`params add credentials becase useBuildkit=${useBuildkit} or useKaniko=${useKaniko}`);
       params.credentials = inputs.credentials?.AccountID ? inputs.credentials : await getCredential(inputs.project?.access);
     }
     await fcCore.setBuildState(serviceName, functionName, '', { status: 'unavailable' });
-    const builder = new Builder(projectName, useDocker, dockerfile, inputs?.path?.configPath, useBuildkit, fcCore);
 
     const output: IOutput = {
       props: inputs.props,
     };
 
-    const buildOutput = await builder.build(params);
-    logger.debug(`[${projectName}] Build output: ${JSON.stringify(buildOutput)}`);
-    if (buildOutput.buildSaveUri) {
-      output.buildSaveUri = buildOutput.buildSaveUri;
+    if (useSandbox || scriptFile || command) {
+      const baseDir = configPath ? path.dirname(configPath) : process.cwd();
+      await removeBuildCache(fcCore, baseDir, serviceName, functionName);
+      const opts = await generateSboxOpts(params, { useSandbox, scriptFile, command }, baseDir);
+      if (!_.isEmpty(opts)) {
+        await startSboxContainer(opts);
+      }
     } else {
-      output.image = buildOutput.image;
+      const builder = new Builder(projectName, useDocker, dockerfile, configPath, useBuildkit, fcCore);
+      const buildOutput = await builder.build(params);
+      logger.debug(`[${projectName}] Build output: ${JSON.stringify(buildOutput)}`);
+      if (buildOutput.buildSaveUri) {
+        output.buildSaveUri = buildOutput.buildSaveUri;
+      } else {
+        output.image = buildOutput.image;
+      }
     }
 
     logger.info('Build artifact successfully.');
