@@ -31,27 +31,14 @@ async function generateMounts(absCodeUri, funcArtifactDir) {
 
   const passwdMount = await docker.resolvePasswdMount();
 
-
   const artifactDirMount = {
     Type: 'bind',
     Source: funcArtifactDir,
     Target: funcArtifactMountDir,
     ReadOnly: false,
   };
-  const testInstall = {
-    Type: 'bind',
-    Source: '/Users/wb447188/Desktop/fc-builders/output/fun-install',
-    Target: '/usr/local/bin/fun-install',
-    ReadOnly: false,
-  };
-  const testsInstall = {
-    Type: 'bind',
-    Source: '/Users/wb447188/Desktop/fc-builders/output/fun-install',
-    Target: '/usr/local/bin/s-install',
-    ReadOnly: false,
-  };
 
-  return _.compact([codeMount, artifactDirMount, passwdMount, testInstall, testsInstall]);
+  return _.compact([codeMount, artifactDirMount, passwdMount]);
 }
 
 export async function generateBuildContainerBuildOpts({
@@ -74,15 +61,18 @@ export async function generateBuildContainerBuildOpts({
   const containerName = docker.generateRamdomContainerName();
 
   // TODO: 加载 env
-  const envs = await docker.generateDockerEnvs({
-    region,
-    baseDir,
-    serviceName,
-    serviceProps,
-    functionName,
-    credentials,
-    functionProps,
-  }, customEnv);
+  const envs = await docker.generateDockerEnvs(
+    {
+      region,
+      baseDir,
+      serviceName,
+      serviceProps,
+      functionName,
+      credentials,
+      functionProps,
+    },
+    customEnv,
+  );
 
   const mounts = await generateMounts(path.resolve(baseDir, codeUri), funcArtifactDir);
 
@@ -95,7 +85,7 @@ export async function generateBuildContainerBuildOpts({
     artifactDir: codeUri === funcArtifactDir ? '/code' : funcArtifactMountDir,
     stages,
     verbose,
-    otherPayload: { additionalArgs }
+    otherPayload: { additionalArgs },
   };
 
   const cmd = ['fun-install', 'build', '--json-params', JSON.stringify(params)];
@@ -103,9 +93,23 @@ export async function generateBuildContainerBuildOpts({
   let imageName: string;
   const filePath = await getFunfile({ codeUri, runtime, baseDir });
   if (filePath) {
-    imageName = await processFunfile(serviceName, codeUri, filePath, funcArtifactDir, runtime, functionName);
+    imageName = await processFunfile(
+      serviceName,
+      codeUri,
+      filePath,
+      funcArtifactDir,
+      runtime,
+      functionName,
+    );
   }
-  const opts = await generateContainerBuildOpts(runtime, containerName, mounts, cmd, envs, imageName);
+  const opts = await generateContainerBuildOpts(
+    runtime,
+    containerName,
+    mounts,
+    cmd,
+    envs,
+    imageName,
+  );
 
   return opts;
 }
@@ -114,7 +118,7 @@ export async function generateSboxOpts(payload, dockerPayload, baseDir) {
   let { imageName, customEnv } = payload.userCustomConfig;
   const { runtime, codeUri, environmentVariables } = payload.functionProps;
   const isInteractive = dockerPayload.useSandbox || false;
-  const isTty = isInteractive && process.stdin.isTTY || false;;
+  const isTty = (isInteractive && process.stdin.isTTY) || false;
 
   if (!imageName) {
     imageName = await resolveRuntimeToDockerImage(runtime);
@@ -129,11 +133,14 @@ export async function generateSboxOpts(payload, dockerPayload, baseDir) {
   }
   const codeResolvePath = path.resolve(baseDir, src);
 
-  const params = { // 执行自定义
+  const params = {
+    // 执行自定义
     method: 'build',
     otherPayload: dockerPayload,
   };
-  const cmd = isInteractive ? ['/bin/bash'] : ['fun-install', 'build', '--json-params', JSON.stringify(params)];
+  const cmd = isInteractive
+    ? ['/bin/bash']
+    : ['fun-install', 'build', '--json-params', JSON.stringify(params)];
 
   docker.displaySboxTips(codeResolvePath);
   const mounts = await generateMounts(codeResolvePath, codeResolvePath);
@@ -163,8 +170,8 @@ export async function generateSboxOpts(payload, dockerPayload, baseDir) {
     Cmd: !_.isEmpty(cmd) ? cmd : ['/bin/bash'],
     HostConfig: {
       AutoRemove: true,
-      Mounts: mounts
-    }
+      Mounts: mounts,
+    },
   };
 }
 
@@ -195,7 +202,7 @@ async function generateContainerBuildOpts(
   const opts = nestedObjectAssign(
     {
       Env: resolveDockerEnv(envs),
-      Image: imageName || await resolveRuntimeToDockerImage(runtime),
+      Image: imageName || (await resolveRuntimeToDockerImage(runtime)),
       name: containerName,
       Cmd: cmd,
       User: resolveDockerUser(),

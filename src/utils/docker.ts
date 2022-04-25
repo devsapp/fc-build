@@ -133,15 +133,18 @@ export function generateRamdomContainerName(): string {
   return `s_local_${new Date().getTime()}_${Math.random().toString(36).substr(2, 7)}`;
 }
 
-export async function generateDockerEnvs({
-  region,
-  baseDir,
-  credentials,
-  serviceName,
-  serviceProps,
-  functionName,
-  functionProps,
-}: IDockerEnvs, userCustomEnv) {
+export async function generateDockerEnvs(
+  {
+    region,
+    baseDir,
+    credentials,
+    serviceName,
+    serviceProps,
+    functionName,
+    functionProps,
+  }: IDockerEnvs,
+  userCustomEnv,
+) {
   const envs: IObject = {};
 
   const { runtime, codeUri } = functionProps;
@@ -154,7 +157,9 @@ export async function generateDockerEnvs({
   const confEnv = await resolveLibPathsFromLdConf(baseDir, codeSrc);
 
   const fcCore = await loadComponent('devsapp/fc-core');
-  const ONLY_CPOY_MANIFEST_FILE = fcCore.isInterpretedLanguage(runtime, path.join(baseDir, codeSrc)) ? 'true' : '';
+  const ONLY_CPOY_MANIFEST_FILE = fcCore.isInterpretedLanguage(runtime, path.join(baseDir, codeSrc))
+    ? 'true'
+    : '';
 
   Object.assign(envs, confEnv);
   Object.assign(envs, generateFunctionEnvs(functionProps));
@@ -195,10 +200,7 @@ interface IMount {
 }
 
 // todo: 当前只支持目录以及 jar。 code uri 还可能是 oss 地址、目录、jar、zip?
-export async function resolveCodeUriToMount(
-  absCodeUri: string,
-  readOnly = true,
-): Promise<IMount> {
+export async function resolveCodeUriToMount(absCodeUri: string, readOnly = true): Promise<IMount> {
   let target = null;
 
   const stats = await fs.lstat(absCodeUri);
@@ -283,33 +285,41 @@ export async function dockerRun(opts: any): Promise<any> {
   return exitRs;
 }
 
-export function buildImage(dockerBuildDir: string, dockerfilePath: string, imageTag: string): Promise<string> {
+export function buildImage(
+  dockerBuildDir: string,
+  dockerfilePath: string,
+  imageTag: string,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const tarStream = tar.pack(dockerBuildDir);
 
-    docker.buildImage(tarStream, {
-      dockerfile: path.relative(dockerBuildDir, dockerfilePath),
-      t: imageTag,
-    }, (error, stream) => {
-      containers.add(stream);
+    docker.buildImage(
+      tarStream,
+      {
+        dockerfile: path.relative(dockerBuildDir, dockerfilePath),
+        t: imageTag,
+      },
+      (error, stream) => {
+        containers.add(stream);
 
-      if (error) {
-        reject(error);
-        return;
-      }
-      stream.on('error', (e) => {
-        containers.delete(stream);
-        reject(e);
-      });
-      stream.on('end', () => {
-        containers.delete(stream);
-        resolve(imageTag);
-      });
+        if (error) {
+          reject(error);
+          return;
+        }
+        stream.on('error', (e) => {
+          containers.delete(stream);
+          reject(e);
+        });
+        stream.on('end', () => {
+          containers.delete(stream);
+          resolve(imageTag);
+        });
 
-      followProgress(stream, (err, res) => {
-        err ? reject(err) : resolve(res);
-      });
-    });
+        followProgress(stream, (err, res) => {
+          err ? reject(err) : resolve(res);
+        });
+      },
+    );
   });
 }
 
@@ -321,18 +331,28 @@ async function zipTo(archive, to) {
   });
 }
 
-export async function generateDockerfileEnvs(credentials: ICredentials, region: string, baseDir: string, serviceProps: IServiceProps, functionProps: IFunctionProps, customEnv) {
+export async function generateDockerfileEnvs(
+  credentials: ICredentials,
+  region: string,
+  baseDir: string,
+  serviceProps: IServiceProps,
+  functionProps: IFunctionProps,
+  customEnv,
+) {
   const serviceName: string = serviceProps.name;
   const functionName: string = functionProps.name;
-  const DockerEnvs = await generateDockerEnvs({
-    region,
-    baseDir,
-    credentials,
-    serviceName,
-    serviceProps,
-    functionName,
-    functionProps,
-  }, customEnv);
+  const DockerEnvs = await generateDockerEnvs(
+    {
+      region,
+      baseDir,
+      credentials,
+      serviceName,
+      serviceProps,
+      functionName,
+      functionProps,
+    },
+    customEnv,
+  );
   const DockerfilEnvs = [];
   Object.keys(DockerEnvs).forEach((key) => {
     DockerfilEnvs.push(`${key}=${DockerEnvs[key]}`);
@@ -398,13 +418,16 @@ function waitingForContainerStopped(): any {
     const c: Array<any> = Array.from(containers);
     for (let container of c) {
       try {
-        if (container.destroy) { // container stream
+        if (container.destroy) {
+          // container stream
           container.destroy();
         } else {
           const c: any = docker.getContainer(container);
           logger.info(`Stopping container ${container}`);
 
-          jobs.push(c.kill().catch(ex => logger.debug(`kill container instance error, error is ${ex}`)));
+          jobs.push(
+            c.kill().catch((ex) => logger.debug(`kill container instance error, error is ${ex}`)),
+          );
         }
       } catch (error) {
         logger.debug(`get container instance error, ignore container to stop, error is ${error}`);
@@ -428,13 +451,16 @@ function waitingForContainerStopped(): any {
       process.stdin?.setRawMode(isRaw);
     }
   };
-};
+}
 
 export function displaySboxTips(codeUri) {
   logger.log(`\nWelcom to s sbox environment.`, 'yellow');
-  logger.log(`1. The local mount directory is ${codeUri}, The container instance mount directory is /code
+  logger.log(
+    `1. The local mount directory is ${codeUri}, The container instance mount directory is /code
 2. It is recommended to install the dependency into the /code directory of the instance to ensure that relevant products can be obtained after the build operation
-3. Some NPM packages will cache some information for the system version. It is recommended to add the parameter [--no-shrinkwrap] when using [npm install]\n`, 'yellow');
+3. Some NPM packages will cache some information for the system version. It is recommended to add the parameter [--no-shrinkwrap] when using [npm install]\n`,
+    'yellow',
+  );
 }
 
 export async function startSboxContainer(opts) {
@@ -448,10 +474,11 @@ export async function startSboxContainer(opts) {
     logs: true,
     stream: true,
     stdin: isInteractive,
-    stdout: true,
-    stderr: true
+    stdout: isTty || isInteractive || isDebug,
+    stderr: true,
   });
 
+  let vm;
   // show outputs
   let logStream;
   if (isTty) {
@@ -462,10 +489,11 @@ export async function startSboxContainer(opts) {
       logStream = await container.logs({
         stdout: true,
         stderr: true,
-        follow: true
+        follow: true,
       });
       container.modem.demuxStream(logStream, process.stdout, process.stderr);
     } else {
+      vm = spinner('builder begin to build\n');
       container.modem.demuxStream(stream, process.stdout, process.stderr);
     }
   }
@@ -475,17 +503,17 @@ export async function startSboxContainer(opts) {
     process.stdin.pipe(stream);
 
     let previousKey;
-    const CTRL_P = '\u0010', CTRL_Q = '\u0011';
+    const CTRL_P = '\u0010',
+      CTRL_Q = '\u0011';
 
     process.stdin.on('data', (key) => {
       // Detects it is detaching a running container
       const keyStr = key.toString('ascii');
       if (previousKey === CTRL_P && keyStr === CTRL_Q) {
-        container.stop(() => { });
+        container.stop(() => {});
       }
       previousKey = keyStr;
     });
-
   }
 
   let resize;
@@ -501,7 +529,7 @@ export async function startSboxContainer(opts) {
     resize = async () => {
       const dimensions = {
         h: process.stdout.rows,
-        w: process.stdout.columns
+        w: process.stdout.columns,
       };
 
       if (dimensions.h !== 0 && dimensions.w !== 0) {
@@ -518,6 +546,9 @@ export async function startSboxContainer(opts) {
   }
 
   await container.wait();
+  if (vm) {
+    vm.stop();
+  }
 
   // cleanup
   if (isTty) {

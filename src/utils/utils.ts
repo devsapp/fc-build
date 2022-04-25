@@ -1,3 +1,4 @@
+import { isDebugMode } from '@serverless-devs/core';
 import _ from 'lodash';
 import path from 'path';
 import rimraf from 'rimraf';
@@ -7,7 +8,7 @@ import logger from '../common/logger';
 
 import { ICodeUri, IObject } from '../interface';
 
-export const isDebug = process.env?.temp_params?.includes('--debug');
+export const isDebug = isDebugMode() || false;
 
 export function sleep(ms: number) {
   return new Promise((resolve) => {
