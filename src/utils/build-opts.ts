@@ -1,4 +1,4 @@
-import _ from 'lodash';
+import { lodash as _ } from '@serverless-devs/core';
 import path from 'path';
 import nestedObjectAssign from 'nested-object-assign';
 import * as docker from './docker';

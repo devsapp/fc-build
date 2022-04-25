@@ -1,4 +1,10 @@
-import { commandParse, help, loadComponent, getCredential, CatchableError } from '@serverless-devs/core';
+import {
+  help,
+  loadComponent,
+  getCredential,
+  CatchableError,
+  lodash as _,
+} from '@serverless-devs/core';
 import Builder from './utils/builder';
 import { IInputs, IBuildInput } from './interface';
 import { HELP, FC_BACKEND } from './utils/constant';
@@ -7,7 +13,7 @@ import { startSboxContainer } from './utils/docker';
 import { generateSboxOpts } from './utils/build-opts';
 import path from 'path';
 import { removeBuildCache } from './utils/utils';
-import _ from 'lodash';
+import commandParse from './commandParse';
 
 interface IOutput {
   props: any;
@@ -22,11 +28,13 @@ export default class Build {
     logger.debug(`[${projectName}]inputs params: ${JSON.stringify(inputs.props)}`);
 
     const apts = {
-      string: ['dockerfile', '--custom-env', '--custom-args'],
+      string: ['dockerfile', 'custom-env', 'custom-args'],
       boolean: ['help', 'use-sandbox', 'use-docker', 'use-buildkit', 'clean-useless-image'],
       alias: { dockerfile: 'f', 'use-docker': 'd', help: 'h' },
     };
-    const argsData: any = commandParse(inputs, apts).data || {};
+    const argsData: any = commandParse(inputs, apts, ['custom-args']);
+    // const argsData: any = commandParse(inputs, apts).data || {};
+    logger.debug(JSON.stringify(argsData, null, 2));
     const {
       h,
       dockerfile = '',
@@ -49,7 +57,9 @@ export default class Build {
       try {
         JSON.parse(customEnv);
       } catch (_ex) {
-        throw new CatchableError(`The parameter passed in by --custom-env is not a standard JSON format: ${customEnv}`);
+        throw new CatchableError(
+          `The parameter passed in by --custom-env is not a standard JSON format: ${customEnv}`,
+        );
       }
     }
 
@@ -75,7 +85,8 @@ export default class Build {
       },
       cleanUselessImage,
       functionName,
-      credentials: { // buildkit 需要密钥信息
+      credentials: {
+        // buildkit 需要密钥信息
         AccountID: '',
         AccessKeyID: '',
         AccessKeySecret: '',
@@ -83,8 +94,12 @@ export default class Build {
       },
     };
     if (useBuildkit || useKaniko) {
-      logger.debug(`params add credentials becase useBuildkit=${useBuildkit} or useKaniko=${useKaniko}`);
-      params.credentials = inputs.credentials?.AccountID ? inputs.credentials : await getCredential(inputs.project?.access);
+      logger.debug(
+        `params add credentials becase useBuildkit=${useBuildkit} or useKaniko=${useKaniko}`,
+      );
+      params.credentials = inputs.credentials?.AccountID
+        ? inputs.credentials
+        : await getCredential(inputs.project?.access);
     }
     await fcCore.setBuildState(serviceName, functionName, '', { status: 'unavailable' });
 
@@ -100,7 +115,14 @@ export default class Build {
         await startSboxContainer(opts);
       }
     } else {
-      const builder = new Builder(projectName, useDocker, dockerfile, configPath, useBuildkit, fcCore);
+      const builder = new Builder(
+        projectName,
+        useDocker,
+        dockerfile,
+        configPath,
+        useBuildkit,
+        fcCore,
+      );
       const buildOutput = await builder.build(params);
       logger.debug(`[${projectName}] Build output: ${JSON.stringify(buildOutput)}`);
       if (buildOutput.buildSaveUri) {

@@ -4,21 +4,36 @@ import { DockerfileParser } from 'dockerfile-ast';
 import path from 'path';
 import { generateDockerfileEnvs, resolveCodeUriToMount } from './docker';
 import { ICredentials, IFunctionProps, IServiceProps } from '../interface';
-import * as _ from 'lodash';
+import { lodash as _ } from '@serverless-devs/core';
 import generatePwdFile from './passwd';
 import { resolveRuntimeToDockerImage } from './get-image-name';
 
-export async function formatDockerfileForBuildkit(dockerfilePath: string, fromSrcToDstPairs: Array<{ src: string; dst: string }>, baseDir: string, targetBuildStage: string) {
+export async function formatDockerfileForBuildkit(
+  dockerfilePath: string,
+  fromSrcToDstPairs: Array<{ src: string; dst: string }>,
+  baseDir: string,
+  targetBuildStage: string,
+) {
   if (!fromSrcToDstPairs) {
     logger.debug('There are no fromSrcToDstPairs');
     return;
   }
-  const dockerfileContent = await convertDockerfileToBuildkitFormat(dockerfilePath, fromSrcToDstPairs, baseDir, targetBuildStage);
+  const dockerfileContent = await convertDockerfileToBuildkitFormat(
+    dockerfilePath,
+    fromSrcToDstPairs,
+    baseDir,
+    targetBuildStage,
+  );
 
   await fs.writeFile(dockerfilePath, dockerfileContent);
 }
 
-async function convertDockerfileToBuildkitFormat(dockerfilePath: string, fromSrcToDstPairs: Array<{ src: string; dst: string }>, baseDir: string, targetBuildStage: string) {
+async function convertDockerfileToBuildkitFormat(
+  dockerfilePath: string,
+  fromSrcToDstPairs: Array<{ src: string; dst: string }>,
+  baseDir: string,
+  targetBuildStage: string,
+) {
   const originalContent = await fs.readFile(dockerfilePath, 'utf8');
   if (!targetBuildStage || !fromSrcToDstPairs) {
     logger.debug('There is no output args.');
@@ -44,7 +59,11 @@ async function convertDockerfileToBuildkitFormat(dockerfilePath: string, fromSrc
   content.push(`FROM scratch as ${targetBuildStage}`);
   fromSrcToDstPairs.forEach((pair) => {
     stages.forEach((stage) => {
-      content.push(`COPY --from=${stage} ${pair.src} ${baseDir === pair.dst ? './' : path.relative(baseDir, pair.dst)}`);
+      content.push(
+        `COPY --from=${stage} ${pair.src} ${
+          baseDir === pair.dst ? './' : path.relative(baseDir, pair.dst)
+        }`,
+      );
     });
   });
 
@@ -64,12 +83,32 @@ async function resolvePasswdMount(contentDir) {
   return null;
 }
 
-export async function generateDockerfileForBuildkit(credentials: ICredentials, region, dockerfilePath: string, serviceConfig: IServiceProps, functionConfig: IFunctionProps, baseDir: string, codeUri: string, funcArtifactDir: string, verbose: any, stages: string[], targetBuildStage: string, userCustomConfig) {
+export async function generateDockerfileForBuildkit(
+  credentials: ICredentials,
+  region,
+  dockerfilePath: string,
+  serviceConfig: IServiceProps,
+  functionConfig: IFunctionProps,
+  baseDir: string,
+  codeUri: string,
+  funcArtifactDir: string,
+  verbose: any,
+  stages: string[],
+  targetBuildStage: string,
+  userCustomConfig,
+) {
   logger.log('Generating dockerfile in buildkit format.');
   const { runtime } = functionConfig;
   const { customEnv, additionalArgs } = userCustomConfig || {};
 
-  const envs = await generateDockerfileEnvs(credentials, region, baseDir, serviceConfig, functionConfig, customEnv);
+  const envs = await generateDockerfileEnvs(
+    credentials,
+    region,
+    baseDir,
+    serviceConfig,
+    functionConfig,
+    customEnv,
+  );
 
   const codeMount = await resolveCodeUriToMount(path.resolve(baseDir, codeUri), false);
 
@@ -85,7 +124,8 @@ export async function generateDockerfileForBuildkit(credentials: ICredentials, r
   const passwdMount = await resolvePasswdMount(baseDir);
   const mountsInDocker = _.compact([codeMount, artifactDirMount, passwdMount]);
 
-  const { fromSrcToDstPairsInBuild, fromSrcToDstPairsInOutput } = generateSrcDstPairsFromMounts(mountsInDocker);
+  const { fromSrcToDstPairsInBuild, fromSrcToDstPairsInOutput } =
+    generateSrcDstPairsFromMounts(mountsInDocker);
 
   const params = {
     method: 'build',
@@ -96,12 +136,20 @@ export async function generateDockerfileForBuildkit(credentials: ICredentials, r
     artifactDir: codeUri === funcArtifactDir ? '/code' : funcArtifactMountDir,
     stages,
     verbose,
-    otherPayload: { additionalArgs }
+    otherPayload: { additionalArgs },
   };
 
   const cmd = `fun-install build --json-params '${JSON.stringify(params)}'`;
   const contentDir = baseDir;
-  const dockerfileContent = await dockerfileForBuildkit(runtime, fromSrcToDstPairsInOutput, fromSrcToDstPairsInBuild, contentDir, targetBuildStage, envs, cmd);
+  const dockerfileContent = await dockerfileForBuildkit(
+    runtime,
+    fromSrcToDstPairsInOutput,
+    fromSrcToDstPairsInBuild,
+    contentDir,
+    targetBuildStage,
+    envs,
+    cmd,
+  );
 
   await fs.writeFile(dockerfilePath, dockerfileContent);
 }
@@ -118,7 +166,16 @@ function generateSrcDstPairsFromMounts(mountsInDocker) {
   return { fromSrcToDstPairsInBuild, fromSrcToDstPairsInOutput };
 }
 
-async function dockerfileForBuildkit(runtime: string, fromSrcToDstPairsInOutput: any, fromSrcToDstPairsInBuild: any, contentDir: string, targetBuildStage: string, envs: any, cmd: string, workdir?: string) {
+async function dockerfileForBuildkit(
+  runtime: string,
+  fromSrcToDstPairsInOutput: any,
+  fromSrcToDstPairsInBuild: any,
+  contentDir: string,
+  targetBuildStage: string,
+  envs: any,
+  cmd: string,
+  workdir?: string,
+) {
   const image = await resolveRuntimeToDockerImage(runtime);
 
   const content = [];
@@ -131,7 +188,14 @@ async function dockerfileForBuildkit(runtime: string, fromSrcToDstPairsInOutput:
     envs.forEach((e) => content.push(`ENV ${e}`));
   }
   if (fromSrcToDstPairsInBuild) {
-    fromSrcToDstPairsInBuild.forEach((pair) => content.push(`COPY ${(contentDir === pair.src || path.resolve(contentDir) === pair.src) ? './' : path.relative(contentDir, pair.src)} ${pair.dst}`));
+    fromSrcToDstPairsInBuild.forEach((pair) =>
+      content.push(
+        `COPY ${
+          contentDir === pair.src || path.resolve(contentDir) === pair.src
+            ? './'
+            : path.relative(contentDir, pair.src)
+        } ${pair.dst}`,
+      ));
   }
   if (cmd) {
     content.push(`RUN ${cmd}`);
@@ -140,8 +204,14 @@ async function dockerfileForBuildkit(runtime: string, fromSrcToDstPairsInOutput:
   if (fromSrcToDstPairsInOutput) {
     content.push(`FROM scratch as ${targetBuildStage}`);
 
-    fromSrcToDstPairsInOutput.forEach((pair) => content.push(`COPY --from=${runtime} ${pair.src} ${(contentDir === pair.dst || path.resolve(contentDir) === pair.dst) ? './' : path.relative(contentDir, pair.dst)}`));
+    fromSrcToDstPairsInOutput.forEach((pair) =>
+      content.push(
+        `COPY --from=${runtime} ${pair.src} ${
+          contentDir === pair.dst || path.resolve(contentDir) === pair.dst
+            ? './'
+            : path.relative(contentDir, pair.dst)
+        }`,
+      ));
   }
   return content.join('\n');
 }
-

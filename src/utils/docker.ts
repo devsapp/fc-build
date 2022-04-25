@@ -1,5 +1,4 @@
-import { spinner, loadComponent } from '@serverless-devs/core';
-import _ from 'lodash';
+import { spinner, loadComponent, lodash as _ } from '@serverless-devs/core';
 import fs from 'fs-extra';
 import tar from 'tar-fs';
 import path from 'path';
@@ -378,7 +377,7 @@ export async function copyFromImage(imageName, from, to) {
 function waitingForContainerStopped(): any {
   // see https://stackoverflow.com/questions/10021373/what-is-the-windows-equivalent-of-process-onsigint-in-node-js
   // @ts-ignore
-  const isRaw = process.isRaw;
+  const { isRaw } = process;
   const kpCallBack: any = (_char, key) => {
     if (key & key.ctrl && key.name === 'c') {
       // @ts-ignore
@@ -392,7 +391,7 @@ function waitingForContainerStopped(): any {
     process.stdin.on('keypress', kpCallBack);
   }
 
-  let stopping: boolean = false;
+  let stopping = false;
 
   process.on('SIGINT', async () => {
     logger.debug(`containers size: ${containers?.size}`);
@@ -412,11 +411,11 @@ function waitingForContainerStopped(): any {
 
     stopping = true;
 
-    logger.info(`\nReceived canncel request, stopping running containers.....`);
+    logger.info('\nReceived canncel request, stopping running containers.....');
 
-    const jobs: Array<any> = [];
-    const c: Array<any> = Array.from(containers);
-    for (let container of c) {
+    const jobs: any[] = [];
+    const c: any[] = Array.from(containers);
+    for (const container of c) {
       try {
         if (container.destroy) {
           // container stream
@@ -454,7 +453,7 @@ function waitingForContainerStopped(): any {
 }
 
 export function displaySboxTips(codeUri) {
-  logger.log(`\nWelcom to s sbox environment.`, 'yellow');
+  logger.log('\nWelcom to s sbox environment.', 'yellow');
   logger.log(
     `1. The local mount directory is ${codeUri}, The container instance mount directory is /code
 2. It is recommended to install the dependency into the /code directory of the instance to ensure that relevant products can be obtained after the build operation
@@ -483,19 +482,17 @@ export async function startSboxContainer(opts) {
   let logStream;
   if (isTty) {
     stream.pipe(process.stdout);
+  } else if (isInteractive || process.platform === 'win32') {
+    // 这种情况很诡异，收不到 stream 的 stdout，使用 log 绕过去。
+    logStream = await container.logs({
+      stdout: true,
+      stderr: true,
+      follow: true,
+    });
+    container.modem.demuxStream(logStream, process.stdout, process.stderr);
   } else {
-    if (isInteractive || process.platform === 'win32') {
-      // 这种情况很诡异，收不到 stream 的 stdout，使用 log 绕过去。
-      logStream = await container.logs({
-        stdout: true,
-        stderr: true,
-        follow: true,
-      });
-      container.modem.demuxStream(logStream, process.stdout, process.stderr);
-    } else {
-      vm = spinner('builder begin to build\n');
-      container.modem.demuxStream(stream, process.stdout, process.stderr);
-    }
+    vm = spinner('builder begin to build\n');
+    container.modem.demuxStream(stream, process.stdout, process.stderr);
   }
 
   if (isInteractive) {
@@ -503,8 +500,8 @@ export async function startSboxContainer(opts) {
     process.stdin.pipe(stream);
 
     let previousKey;
-    const CTRL_P = '\u0010',
-      CTRL_Q = '\u0011';
+    const CTRL_P = '\u0010';
+    const CTRL_Q = '\u0011';
 
     process.stdin.on('data', (key) => {
       // Detects it is detaching a running container

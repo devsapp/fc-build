@@ -1,5 +1,4 @@
-import { isDebugMode } from '@serverless-devs/core';
-import _ from 'lodash';
+import { isDebugMode, lodash as _ } from '@serverless-devs/core';
 import path from 'path';
 import rimraf from 'rimraf';
 import readline from 'readline';
@@ -17,10 +16,7 @@ export function sleep(ms: number) {
 }
 
 export function getExcludeFilesEnv(): string {
-  return [
-    '.s',
-    's.yml',
-  ].join(';');
+  return ['.s', 's.yml'].join(';');
 }
 
 export function checkCodeUri(codeUri: string | ICodeUri): string {
@@ -109,10 +105,18 @@ export async function removeBuildCache(fcCore, baseDir, serviceName, functionNam
         rimraf(artifactPath, (err) => resolve(''));
       });
     }
-  } catch (_ex) { /** 如果异常不阻塞主进程运行 */ }
+  } catch (_ex) {
+    /** 如果异常不阻塞主进程运行 */
+  }
 
   try {
-    const buildFilesListJSONPath = fcCore.genBuildLinkFilesListJSONPath(baseDir, serviceName, functionName);
+    const buildFilesListJSONPath = fcCore.genBuildLinkFilesListJSONPath(
+      baseDir,
+      serviceName,
+      functionName,
+    );
     await fs.remove(buildFilesListJSONPath);
-  } catch (_ex) { /** 如果异常不阻塞主进程运行 */ }
+  } catch (_ex) {
+    /** 如果异常不阻塞主进程运行 */
+  }
 }
