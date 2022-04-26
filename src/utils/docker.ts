@@ -473,11 +473,10 @@ export async function startSboxContainer(opts) {
     logs: true,
     stream: true,
     stdin: isInteractive,
-    stdout: isTty || isInteractive || isDebug,
+    stdout: true,
     stderr: true,
   });
 
-  let vm;
   // show outputs
   let logStream;
   if (isTty) {
@@ -491,7 +490,6 @@ export async function startSboxContainer(opts) {
     });
     container.modem.demuxStream(logStream, process.stdout, process.stderr);
   } else {
-    vm = spinner('builder begin to build\n');
     container.modem.demuxStream(stream, process.stdout, process.stderr);
   }
 
@@ -543,9 +541,6 @@ export async function startSboxContainer(opts) {
   }
 
   await container.wait();
-  if (vm) {
-    vm.stop();
-  }
 
   // cleanup
   if (isTty) {
