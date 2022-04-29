@@ -6,8 +6,14 @@ import fs from 'fs-extra';
 import logger from '../common/logger';
 
 import { ICodeUri, IObject } from '../interface';
+import { FC_BACKEND } from './constant';
 
 export const isDebug = isDebugMode() || false;
+
+const { BUILD_IMAGE_ENV, enableBuildkitServer, buildkitServerPort } = process.env;
+export const useKaniko = BUILD_IMAGE_ENV === FC_BACKEND;
+export const compelUseBuildkit =
+  _.isEqual(enableBuildkitServer, '1') && /^\d+$/.test(buildkitServerPort || '');
 
 export function sleep(ms: number) {
   return new Promise((resolve) => {

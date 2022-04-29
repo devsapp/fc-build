@@ -14,13 +14,13 @@ export interface IInputs {
 export interface IBuildInput {
   serviceName: string;
   functionName: string;
+  dockerfile?: string;
   serviceProps?: IServiceProps;
   functionProps?: IFunctionProps;
   verbose?: boolean;
   region?: string;
   credentials?: ICredentials;
   cleanUselessImage?: Boolean;
-  userCustomConfig?: any;
 }
 
 export interface IProperties {

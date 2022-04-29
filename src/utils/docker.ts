@@ -452,19 +452,23 @@ function waitingForContainerStopped(): any {
   };
 }
 
-export function displaySboxTips(codeUri) {
+export function displaySboxTips(codeUri, useSandbox) {
   logger.log('\nWelcom to s sbox environment.', 'yellow');
   logger.log(
     `1. The local mount directory is ${codeUri}, The container instance mount directory is /code
 2. It is recommended to install the dependency into the /code directory of the instance to ensure that relevant products can be obtained after the build operation
-3. Some NPM packages will cache some information for the system version. It is recommended to add the parameter [--no-shrinkwrap] when using [npm install]\n`,
+3. Some NPM packages will cache some information for the system version. It is recommended to add the parameter [--no-shrinkwrap] when using [npm install]${
+      useSandbox ? '\n4. Enter [exit] to exit' : ''
+    }\n`,
     'yellow',
   );
 }
 
 export async function startSboxContainer(opts) {
+  const fcCore = await loadComponent('devsapp/fc-core');
+  await fcCore.pullImageIfNeed(docker, opts.Image);
+
   const { OpenStdin: isInteractive, Tty: isTty } = opts;
-  // console.log('opts:: ', opts.Env);
   const container = await createContainer(opts);
   containers.add(container.id);
   await container.start();

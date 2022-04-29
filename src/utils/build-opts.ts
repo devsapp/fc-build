@@ -2,7 +2,7 @@ import { lodash as _ } from '@serverless-devs/core';
 import path from 'path';
 import nestedObjectAssign from 'nested-object-assign';
 import * as docker from './docker';
-import { IServiceProps, IFunctionProps, ICredentials } from '../interface';
+import { IServiceProps, IFunctionProps, ICredentials, IBuildInput } from '../interface';
 import { resolveRuntimeToDockerImage } from './get-image-name';
 import { processFunfile, getFunfile } from './install-file';
 import { addEnv } from './env';
@@ -39,6 +39,21 @@ async function generateMounts(absCodeUri, funcArtifactDir) {
   };
 
   return _.compact([codeMount, artifactDirMount, passwdMount]);
+
+  // const buildersLocal = {
+  //   Type: 'bind',
+  //   Source: '/Users/wb447188/Desktop/fc-builders/output/fun-install',
+  //   Target: '/usr/local/bin/fun-install',
+  //   ReadOnly: false,
+  // };
+  // const buildersLocals = {
+  //   Type: 'bind',
+  //   Source: '/Users/wb447188/Desktop/fc-builders/output/fun-install',
+  //   Target: '/usr/local/bin/s-install',
+  //   ReadOnly: false,
+  // };
+
+  // return _.compact([codeMount, artifactDirMount, passwdMount, buildersLocal, buildersLocals]);
 }
 
 export async function generateBuildContainerBuildOpts({
@@ -114,17 +129,14 @@ export async function generateBuildContainerBuildOpts({
   return opts;
 }
 
-export async function generateSboxOpts(payload, dockerPayload, baseDir) {
-  let { imageName, customEnv } = payload.userCustomConfig;
+export async function generateSboxOpts(payload: IBuildInput, dockerPayload, baseDir) {
+  let { useSandbox = false, customEnv } = dockerPayload;
   const { runtime, codeUri, environmentVariables } = payload.functionProps;
-  const isInteractive = dockerPayload.useSandbox || false;
-  const isTty = (isInteractive && process.stdin.isTTY) || false;
+  const isTty = (useSandbox && process.stdin.isTTY) || false;
 
+  const imageName = await resolveRuntimeToDockerImage(runtime);
   if (!imageName) {
-    imageName = await resolveRuntimeToDockerImage(runtime);
-    if (!imageName) {
-      throw new Error(`invalid runtime name ${runtime}`);
-    }
+    throw new Error(`invalid runtime name ${runtime}`);
   }
 
   const src = checkCodeUri(codeUri);
@@ -138,33 +150,33 @@ export async function generateSboxOpts(payload, dockerPayload, baseDir) {
     method: 'build',
     otherPayload: dockerPayload,
   };
-  const cmd = isInteractive
+  const cmd = useSandbox
     ? ['/bin/bash']
     : ['fun-install', 'build', '--json-params', JSON.stringify(params)];
 
-  docker.displaySboxTips(codeResolvePath);
+  docker.displaySboxTips(codeResolvePath, useSandbox);
   const mounts = await generateMounts(codeResolvePath, codeResolvePath);
   const envs = _.assign({}, Object.assign(environmentVariables || {}, customEnv || {}));
 
-  if (isInteractive) {
+  if (useSandbox) {
     envs.S_SANDBOX = 's_sandbox'; // 控制 s-install
   }
 
   logger.debug(`runtime: ${runtime}`);
   logger.debug(`mounts: ${mounts}`);
   logger.debug(`isTty: ${isTty}`);
-  logger.debug(`isInteractive: ${isInteractive}`);
+  logger.debug(`isInteractive: ${useSandbox}`);
   logger.debug(`isInteractive: ${cmd}`);
 
   return {
     Image: imageName,
     Hostname: `fc-${runtime}`,
-    AttachStdin: isInteractive,
+    AttachStdin: useSandbox,
     AttachStdout: true,
     AttachStderr: true,
     User: resolveDockerUser(),
     Tty: isTty,
-    OpenStdin: isInteractive,
+    OpenStdin: useSandbox,
     StdinOnce: true,
     Env: resolveDockerEnv(envs),
     Cmd: !_.isEmpty(cmd) ? cmd : ['/bin/bash'],

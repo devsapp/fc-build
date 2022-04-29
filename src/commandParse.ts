@@ -1,9 +1,16 @@
 import { commandParse, lodash as _ } from '@serverless-devs/core';
+import logger from './common/logger';
 
-export default (inputs: any, apts: any, complexParames: string[] = []) => {
+const APTS = {
+  string: ['dockerfile', 'custom-env', 'custom-args'],
+  boolean: ['help', 'use-sandbox', 'use-docker', 'use-buildkit', 'clean-useless-image'],
+  alias: { dockerfile: 'f', 'use-docker': 'd', help: 'h' },
+};
+
+export default (inputs: any, complexParames: string[] = []) => {
   const { argsObj } = inputs;
   if (_.isEmpty(argsObj) || _.isEmpty(complexParames)) {
-    return commandParse(inputs, apts).data || {};
+    return commandParse(inputs, APTS).data || {};
   }
 
   const complex: any = {};
@@ -23,7 +30,10 @@ export default (inputs: any, apts: any, complexParames: string[] = []) => {
     }
   }
   // @ts-ignore
-  const argsData = commandParse({ argsObj }, apts).data || {};
+  const argsData = commandParse({ argsObj }, APTS).data || {};
 
-  return { ...argsData, ...complex };
+  const argsPayload = { ...argsData, ...complex };
+  logger.debug(`argsPayload: ${JSON.stringify(argsPayload)}`);
+
+  return argsPayload;
 };
