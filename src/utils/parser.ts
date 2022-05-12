@@ -1,18 +1,28 @@
 /* eslint-disable no-await-in-loop */
 
-import _ from 'lodash';
+import { lodash as _ } from '@serverless-devs/core';
 import fs from 'fs-extra';
 import { DockerfileParser } from 'dockerfile-ast';
 import logger from '../common/logger';
 import { resolveRuntimeToDockerImage } from './get-image-name';
 
-
 const RESERVED_DOCKER_CMD = [
-  'FROM', 'Add', 'ONBUILD',
-  'ARG', 'CMD', 'ENTRYPOINT',
-  'VOLUME', 'STOPSIGNAL'];
+  'FROM',
+  'Add',
+  'ONBUILD',
+  'ARG',
+  'CMD',
+  'ENTRYPOINT',
+  'VOLUME',
+  'STOPSIGNAL',
+];
 
-export async function funfileToDockerfile(funfilePath: string, runtime: string, serviceName: string, functionName: string) {
+export async function funfileToDockerfile(
+  funfilePath: string,
+  runtime: string,
+  serviceName: string,
+  functionName: string,
+) {
   const content = await fs.readFile(funfilePath, 'utf8');
 
   const funfile = DockerfileParser.parse(content);
@@ -37,11 +47,13 @@ If you have a requirement, you can submit the issue at https://github.com/devsap
       const runtimeOfFunfile = runtimeArgs[0].getValue();
 
       if (runtimeOfFunfile !== runtime) {
-        logger.warning(`\nDetectionWarning: The 'runtime' of '${serviceName}/${functionName}' in your yml is inconsistent with that in Funfile.`);
+        logger.warn(
+          `\nDetectionWarning: The 'runtime' of '${serviceName}/${functionName}' in your yml is inconsistent with that in Funfile.`,
+        );
       }
 
       const imageName = await resolveRuntimeToDockerImage(runtimeOfFunfile);
-      dockerfile.push(`FROM ${ imageName } as ${runtimeOfFunfile}`);
+      dockerfile.push(`FROM ${imageName} as ${runtimeOfFunfile}`);
     } else {
       const range = instruction.getRange();
       // @ts-ignore: .

@@ -1,11 +1,18 @@
-import { commandParse, help, loadComponent, getCredential } from '@serverless-devs/core';
+import {
+  help,
+  loadComponent,
+  getCredential,
+  CatchableError,
+  lodash as _,
+} from '@serverless-devs/core';
+import path from 'path';
 import Builder from './utils/builder';
 import { IInputs, IBuildInput } from './interface';
-import { CONTEXT, HELP, FC_BACKEND } from './utils/constant';
-import Logger from './common/logger';
-import { logger } from '@serverless-devs/core/dist/logger';
+import { HELP } from './utils/constant';
+import logger from './common/logger';
+import { compelUseBuildkit, useKaniko } from './utils/utils';
+import commandParse from './commandParse';
 
-Logger.setContent(CONTEXT);
 interface IOutput {
   props: any;
   image?: string;
@@ -14,72 +21,95 @@ interface IOutput {
 
 export default class Build {
   async build(inputs: IInputs) {
-    Logger.info('Build artifact start...');
-    const projectName = inputs.project?.projectName;
-    Logger.debug(`[${projectName}]inputs params: ${JSON.stringify(inputs.props)}`);
+    logger.info('Build artifact start...');
+    const projectName = _.get(inputs, 'project.projectName');
+    logger.debug(`[${projectName}]inputs params: ${JSON.stringify(inputs.props)}`);
 
-    const apts = {
-      string: ['dockerfile'],
-      boolean: ['help', 'use-docker', 'use-buildkit', 'clean-useless-image'],
-      alias: { dockerfile: 'f', 'use-docker': 'd', help: 'h' },
-    };
-    const argsData: any = commandParse(inputs, apts).data || {};
-    const { dockerfile = '', h }: any = argsData;
-    const useBuildkit: boolean = argsData['use-buildkit'];
-    const useDocker: boolean = argsData['use-docker'];
-    const cleanUselessImage = argsData['clean-useless-image'];
-    const useKaniko: boolean = process.env.BUILD_IMAGE_ENV === FC_BACKEND;
+    const {
+      h,
+      dockerfile = '',
+      'use-buildkit': useBuildkit,
+      'use-docker': useDocker,
+      'clean-useless-image': cleanUselessImage,
+      'custom-env': customEnv,
+      'custom-args': customArgs,
+      'use-sandbox': useSandbox,
+      command,
+      'script-file': scriptFile,
+    }: any = commandParse(inputs, ['custom-args']);
 
     if (h) {
       help(HELP);
       return;
     }
+    if (customEnv) {
+      try {
+        JSON.parse(customEnv);
+      } catch (_ex) {
+        const showError = `The parameter passed in by --custom-env is not a standard JSON format: ${customEnv}`;
+        throw new CatchableError(showError);
+      }
+    }
 
     const { region, service: serviceProps, function: functionProps } = inputs.props;
-    const { runtime } = functionProps;
+    const { runtime, name: functionName } = functionProps;
+    logger.debug(`[${projectName}] Runtime is ${runtime}.`);
 
-    const fcCore = await loadComponent('devsapp/fc-core');
     if (!runtime) {
-      throw new fcCore.CatchableError('Parameter function.runtime is required');
+      throw new CatchableError('Parameter function.runtime is required');
     }
 
     const serviceName = serviceProps.name;
-    const functionName = functionProps.name;
     const params: IBuildInput = {
       region,
       serviceProps,
       functionProps,
       serviceName,
+      dockerfile,
       cleanUselessImage,
       functionName,
-      credentials: { // buildkit 需要密钥信息
+      credentials: {
+        // buildkit 需要密钥信息
         AccountID: '',
         AccessKeyID: '',
         AccessKeySecret: '',
         SecurityToken: '',
       },
     };
-    if (useBuildkit || useKaniko) {
-      logger.debug(`params add credentials becase useBuildkit=${useBuildkit} or useKaniko=${useKaniko}`);
-      params.credentials = inputs.credentials?.AccountID ? inputs.credentials : await getCredential(inputs.project?.access);
+    const buildkit = useBuildkit || compelUseBuildkit; // 使用 use-buildkit
+    if (buildkit || useKaniko) {
+      logger.debug(`credentials becase useBuildkit=${buildkit} or useKaniko=${useKaniko}`);
+      params.credentials = _.isEmpty(inputs.credentials)
+        ? inputs.credentials
+        : await getCredential(inputs.project?.access);
     }
-    await fcCore.setBuildState(serviceName, functionName, '', { status: 'unavailable' });
-    const builder = new Builder(projectName, useDocker, dockerfile, inputs?.path?.configPath, useBuildkit, fcCore);
 
-    const output: IOutput = {
-      props: inputs.props,
+    // 构建 Build 入参
+    const useModel = { useSandbox, useKaniko, useBuildkit: buildkit, useDocker };
+    const argsPayload = {
+      customEnv: customEnv ? JSON.parse(customEnv) : undefined,
+      additionalArgs: customArgs ? customArgs.split(' ') : [],
+      scriptFile,
+      command,
     };
+    const configPath = _.get(inputs, 'path.configPath');
+    const configDirPath = configPath ? path.dirname(configPath) : process.cwd();
+    const fcCore = await loadComponent('devsapp/fc-core');
 
-    const buildOutput = await builder.build(params);
-    Logger.debug(`[${projectName}] Build output: ${JSON.stringify(buildOutput)}`);
+    const builder = new Builder(projectName, configDirPath, fcCore, useModel, argsPayload);
+    await fcCore.setBuildState(serviceName, functionName, '', { status: 'unavailable' }); // 设置 build 开始状态
+    const buildOutput = await builder.build(params); // 开始build
+    await fcCore.setBuildState(serviceName, functionName, '', { status: 'available' }); // 设置 build 结束状态
+
+    logger.debug(`[${projectName}] Build output: ${JSON.stringify(buildOutput)}`);
+
+    const output: IOutput = { props: inputs.props };
     if (buildOutput.buildSaveUri) {
       output.buildSaveUri = buildOutput.buildSaveUri;
     } else {
       output.image = buildOutput.image;
     }
-
-    Logger.info('Build artifact successfully.');
-    await fcCore.setBuildState(serviceName, functionName, '', { status: 'available' });
+    logger.info('Build artifact successfully.');
     return output;
   }
 }

@@ -1,4 +1,4 @@
-import _ from 'lodash';
+import { lodash as _ } from '@serverless-devs/core';
 import { IObject } from '../interface';
 
 const sysLibs = [

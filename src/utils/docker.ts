@@ -1,15 +1,14 @@
-import { Logger, spinner, loadComponent } from '@serverless-devs/core';
-import _ from 'lodash';
+import { spinner, loadComponent, lodash as _ } from '@serverless-devs/core';
 import fs from 'fs-extra';
 import tar from 'tar-fs';
 import path from 'path';
 import Docker from 'dockerode';
 import DraftLog from 'draftlog';
+import logger from '../common/logger';
 import generatePwdFile from './passwd';
 import findPathsOutofSharedPaths from './docker-support';
 import { resolveLibPathsFromLdConf, checkCodeUri, getExcludeFilesEnv, isDebug } from './utils';
 import { addEnv } from './env';
-import { CONTEXT } from './constant';
 import { IServiceProps, IFunctionProps, IObject, ICredentials } from '../interface';
 
 DraftLog.into(console);
@@ -41,8 +40,7 @@ function generateFunctionEnvs(functionProps: IFunctionProps): IObject {
 async function createContainer(opts): Promise<any> {
   const isMac = process.platform === 'darwin';
 
-  Logger.debug(CONTEXT, `Operating platform: ${process.platform}`);
-
+  logger.debug(`Operating platform: ${process.platform}`);
   if (opts && isMac) {
     if (opts.HostConfig) {
       const pathsOutofSharedPaths = await findPathsOutofSharedPaths(opts.HostConfig.Mounts);
@@ -75,7 +73,7 @@ async function createContainer(opts): Promise<any> {
 
 async function isDockerToolBoxAndEnsureDockerVersion(): Promise<boolean> {
   const dockerInfo = await docker.info();
-  Logger.debug(CONTEXT, `Docker info: ${JSON.stringify(dockerInfo)}`);
+  logger.debug(`Docker info: ${JSON.stringify(dockerInfo)}`);
 
   await detectDockerVersion(dockerInfo.ServerVersion || '');
 
@@ -116,13 +114,13 @@ function followProgress(stream, onFinished) {
         // @ts-ignore: 引入 draftlog 注入的方法
         barLines[id] = console.draft();
       }
-      barLines[id](`${id }: ${ status}`);
+      barLines[id](`${id}: ${status}`);
     } else {
       if (_.has(event, 'aux.ID')) {
-        event.stream = `${event.aux.ID }\n`;
+        event.stream = `${event.aux.ID}\n`;
       }
       // If there is no id, the line should be wrapped manually.
-      const out = event.status ? `${event.status }\n` : event.stream;
+      const out = event.status ? `${event.status}\n` : event.stream;
       process.stdout.write(out);
     }
   };
@@ -134,15 +132,18 @@ export function generateRamdomContainerName(): string {
   return `s_local_${new Date().getTime()}_${Math.random().toString(36).substr(2, 7)}`;
 }
 
-export async function generateDockerEnvs({
-  region,
-  baseDir,
-  credentials,
-  serviceName,
-  serviceProps,
-  functionName,
-  functionProps,
-}: IDockerEnvs) {
+export async function generateDockerEnvs(
+  {
+    region,
+    baseDir,
+    credentials,
+    serviceName,
+    serviceProps,
+    functionName,
+    functionProps,
+  }: IDockerEnvs,
+  userCustomEnv,
+) {
   const envs: IObject = {};
 
   const { runtime, codeUri } = functionProps;
@@ -155,10 +156,16 @@ export async function generateDockerEnvs({
   const confEnv = await resolveLibPathsFromLdConf(baseDir, codeSrc);
 
   const fcCore = await loadComponent('devsapp/fc-core');
-  const ONLY_CPOY_MANIFEST_FILE = fcCore.isInterpretedLanguage(runtime, path.join(baseDir, codeSrc)) ? 'true' : '';
+  const ONLY_CPOY_MANIFEST_FILE = fcCore.isInterpretedLanguage(runtime, path.join(baseDir, codeSrc))
+    ? 'true'
+    : '';
 
   Object.assign(envs, confEnv);
   Object.assign(envs, generateFunctionEnvs(functionProps));
+
+  if (userCustomEnv) {
+    Object.assign(envs, userCustomEnv);
+  }
   Object.assign(envs, {
     ONLY_CPOY_MANIFEST_FILE,
     local: true,
@@ -192,10 +199,7 @@ interface IMount {
 }
 
 // todo: 当前只支持目录以及 jar。 code uri 还可能是 oss 地址、目录、jar、zip?
-export async function resolveCodeUriToMount(
-  absCodeUri: string,
-  readOnly = true,
-): Promise<IMount> {
+export async function resolveCodeUriToMount(absCodeUri: string, readOnly = true): Promise<IMount> {
   let target = null;
 
   const stats = await fs.lstat(absCodeUri);
@@ -273,40 +277,48 @@ export async function dockerRun(opts: any): Promise<any> {
   const exitRs = await container.wait();
   vm?.stop();
 
-  Logger.debug(CONTEXT, `Container wait: ${JSON.stringify(exitRs)} `);
+  logger.debug(`Container wait: ${JSON.stringify(exitRs)} `);
 
   containers.delete(container.id);
 
   return exitRs;
 }
 
-export function buildImage(dockerBuildDir: string, dockerfilePath: string, imageTag: string): Promise<string> {
+export function buildImage(
+  dockerBuildDir: string,
+  dockerfilePath: string,
+  imageTag: string,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const tarStream = tar.pack(dockerBuildDir);
 
-    docker.buildImage(tarStream, {
-      dockerfile: path.relative(dockerBuildDir, dockerfilePath),
-      t: imageTag,
-    }, (error, stream) => {
-      containers.add(stream);
+    docker.buildImage(
+      tarStream,
+      {
+        dockerfile: path.relative(dockerBuildDir, dockerfilePath),
+        t: imageTag,
+      },
+      (error, stream) => {
+        containers.add(stream);
 
-      if (error) {
-        reject(error);
-        return;
-      }
-      stream.on('error', (e) => {
-        containers.delete(stream);
-        reject(e);
-      });
-      stream.on('end', () => {
-        containers.delete(stream);
-        resolve(imageTag);
-      });
+        if (error) {
+          reject(error);
+          return;
+        }
+        stream.on('error', (e) => {
+          containers.delete(stream);
+          reject(e);
+        });
+        stream.on('end', () => {
+          containers.delete(stream);
+          resolve(imageTag);
+        });
 
-      followProgress(stream, (err, res) => {
-        err ? reject(err) : resolve(res);
-      });
-    });
+        followProgress(stream, (err, res) => {
+          err ? reject(err) : resolve(res);
+        });
+      },
+    );
   });
 }
 
@@ -318,25 +330,34 @@ async function zipTo(archive, to) {
   });
 }
 
-export async function generateDockerfileEnvs(credentials: ICredentials, region: string, baseDir: string, serviceProps: IServiceProps, functionProps: IFunctionProps) {
+export async function generateDockerfileEnvs(
+  credentials: ICredentials,
+  region: string,
+  baseDir: string,
+  serviceProps: IServiceProps,
+  functionProps: IFunctionProps,
+  customEnv,
+) {
   const serviceName: string = serviceProps.name;
   const functionName: string = functionProps.name;
-  const DockerEnvs = await generateDockerEnvs({
-    region,
-    baseDir,
-    credentials,
-    serviceName,
-    serviceProps,
-    functionName,
-    functionProps,
-  });
+  const DockerEnvs = await generateDockerEnvs(
+    {
+      region,
+      baseDir,
+      credentials,
+      serviceName,
+      serviceProps,
+      functionName,
+      functionProps,
+    },
+    customEnv,
+  );
   const DockerfilEnvs = [];
   Object.keys(DockerEnvs).forEach((key) => {
     DockerfilEnvs.push(`${key}=${DockerEnvs[key]}`);
   });
   return DockerfilEnvs;
 }
-
 
 export async function copyFromImage(imageName, from, to) {
   const container = await docker.createContainer({
@@ -350,4 +371,199 @@ export async function copyFromImage(imageName, from, to) {
   await zipTo(archive, to);
 
   await container.remove();
+}
+
+// exit container, when use ctrl + c
+function waitingForContainerStopped(): any {
+  // see https://stackoverflow.com/questions/10021373/what-is-the-windows-equivalent-of-process-onsigint-in-node-js
+  // @ts-ignore
+  const { isRaw } = process;
+  const kpCallBack: any = (_char, key) => {
+    if (key & key.ctrl && key.name === 'c') {
+      // @ts-ignore
+      process.emit('SIGINT');
+    }
+  };
+  if (process.platform === 'win32') {
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(isRaw);
+    }
+    process.stdin.on('keypress', kpCallBack);
+  }
+
+  let stopping = false;
+
+  process.on('SIGINT', async () => {
+    logger.debug(`containers size: ${containers?.size}`);
+
+    if (stopping) {
+      return;
+    }
+
+    // Just fix test on windows
+    // Because process.emit('SIGINT') in test/docker.test.js will not trigger rl.on('SIGINT')
+    // And when listening to stdin the process never finishes until you send a SIGINT signal explicitly.
+    process.stdin.destroy();
+
+    if (!containers.size) {
+      return;
+    }
+
+    stopping = true;
+
+    logger.info('\nReceived canncel request, stopping running containers.....');
+
+    const jobs: any[] = [];
+    const c: any[] = Array.from(containers);
+    for (const container of c) {
+      try {
+        if (container.destroy) {
+          // container stream
+          container.destroy();
+        } else {
+          const con: any = docker.getContainer(container);
+          logger.info(`Stopping container ${container}`);
+
+          jobs.push(
+            con.kill().catch((ex) => logger.debug(`kill container instance error, error is ${ex}`)),
+          );
+        }
+      } catch (error) {
+        logger.debug(`get container instance error, ignore container to stop, error is ${error}`);
+      }
+    }
+
+    try {
+      await Promise.all(jobs);
+      logger.info('All containers stopped');
+      // 修复Ctrl C 后容器退出，但是程序会 block 住的问题
+      process.exit(0);
+    } catch (error) {
+      logger.error(error);
+      process.exit(-1); // eslint-disable-line
+    }
+  });
+
+  return () => {
+    process.stdin.removeListener('keypress', kpCallBack);
+    if (process.stdin.isTTY) {
+      process.stdin?.setRawMode(isRaw);
+    }
+  };
+}
+
+export function displaySboxTips(codeUri, useSandbox) {
+  logger.log('\nWelcom to s sbox environment.', 'yellow');
+  logger.log(
+    `1. The local mount directory is ${codeUri}, The container instance mount directory is /code
+2. It is recommended to install the dependency into the /code directory of the instance to ensure that relevant products can be obtained after the build operation
+3. Some NPM packages will cache some information for the system version. It is recommended to add the parameter [--no-shrinkwrap] when using [npm install]${
+  useSandbox ? '\n4. Enter [exit] to exit' : ''
+}\n`,
+    'yellow',
+  );
+}
+
+export async function startSboxContainer(opts) {
+  const fcCore = await loadComponent('devsapp/fc-core');
+  await fcCore.pullImageIfNeed(docker, opts.Image);
+
+  const { OpenStdin: isInteractive, Tty: isTty } = opts;
+  const container = await createContainer(opts);
+  containers.add(container.id);
+  await container.start();
+
+  const stream = await container.attach({
+    logs: true,
+    stream: true,
+    stdin: isInteractive,
+    stdout: true,
+    stderr: true,
+  });
+
+  // show outputs
+  let logStream;
+  if (isTty) {
+    stream.pipe(process.stdout);
+  } else if (isInteractive || process.platform === 'win32') {
+    // 这种情况很诡异，收不到 stream 的 stdout，使用 log 绕过去。
+    logStream = await container.logs({
+      stdout: true,
+      stderr: true,
+      follow: true,
+    });
+    container.modem.demuxStream(logStream, process.stdout, process.stderr);
+  } else {
+    container.modem.demuxStream(stream, process.stdout, process.stderr);
+  }
+
+  if (isInteractive) {
+    // Connect stdin
+    process.stdin.pipe(stream);
+
+    let previousKey;
+    const CTRL_P = '\u0010';
+    const CTRL_Q = '\u0011';
+
+    process.stdin.on('data', (key) => {
+      // Detects it is detaching a running container
+      const keyStr = key.toString('ascii');
+      if (previousKey === CTRL_P && keyStr === CTRL_Q) {
+        container.stop(() => {});
+      }
+      previousKey = keyStr;
+    });
+  }
+
+  let resize;
+
+  // @ts-ignore
+  const { isRaw } = process;
+  const goThrough = waitingForContainerStopped();
+  if (isTty) {
+    goThrough();
+
+    process.stdin.setRawMode(true);
+
+    resize = async () => {
+      const dimensions = {
+        h: process.stdout.rows,
+        w: process.stdout.columns,
+      };
+
+      if (dimensions.h !== 0 && dimensions.w !== 0) {
+        await container.resize(dimensions);
+      }
+    };
+
+    await resize();
+    process.stdout.on('resize', resize);
+
+    // 在不加任何 cmd 的情况下 shell prompt 需要输出一些字符才会显示，
+    // 这里输入一个空格+退格，绕过这个怪异的问题。
+    stream.write(' \b');
+  }
+
+  await container.wait();
+
+  // cleanup
+  if (isTty) {
+    process.stdout.removeListener('resize', resize);
+    process.stdin.setRawMode(isRaw);
+  }
+  if (isInteractive) {
+    process.stdin.removeAllListeners();
+    process.stdin.unpipe(stream);
+    process.stdin.destroy();
+  }
+  if (logStream) {
+    logStream.removeAllListeners();
+  }
+  stream.unpipe(process.stdout);
+  stream.destroy();
+
+  containers.delete(container.id);
+  if (!isTty) {
+    goThrough();
+  }
 }

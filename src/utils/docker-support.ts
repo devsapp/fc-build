@@ -1,4 +1,4 @@
-import _ from 'lodash';
+import { lodash as _ } from '@serverless-devs/core';
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';

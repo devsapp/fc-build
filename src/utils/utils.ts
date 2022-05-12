@@ -1,13 +1,20 @@
-import { Logger } from '@serverless-devs/core';
-import { CONTEXT } from './constant';
-import _ from 'lodash';
+import { isDebugMode, lodash as _ } from '@serverless-devs/core';
 import path from 'path';
+import rimraf from 'rimraf';
 import readline from 'readline';
 import fs from 'fs-extra';
+import logger from '../common/logger';
 
 import { ICodeUri, IObject } from '../interface';
+import { FC_BACKEND } from './constant';
 
-export const isDebug = process.env?.temp_params?.includes('--debug');
+export const isDebug = isDebugMode() || false;
+
+const { BUILD_IMAGE_ENV, enableBuildkitServer, buildkitServerPort } = process.env;
+export const useKaniko = BUILD_IMAGE_ENV === FC_BACKEND;
+export const compelUseBuildkit =
+  _.isEqual(enableBuildkitServer, '1') && /^\d+$/.test(buildkitServerPort || '');
+export const buildkitServerAddr = process.env.buildkitServerAddr || 'localhost';
 
 export function sleep(ms: number) {
   return new Promise((resolve) => {
@@ -16,10 +23,7 @@ export function sleep(ms: number) {
 }
 
 export function getExcludeFilesEnv(): string {
-  return [
-    '.s',
-    's.yml',
-  ].join(';');
+  return ['.s', 's.yml'].join(';');
 }
 
 export function checkCodeUri(codeUri: string | ICodeUri): string {
@@ -30,12 +34,12 @@ export function checkCodeUri(codeUri: string | ICodeUri): string {
   const src = _.isString(codeUri) ? codeUri : codeUri.src;
 
   if (!src) {
-    Logger.info(CONTEXT, 'No Src configured, skip building.');
+    logger.info('No Src configured, skip building.');
     return '';
   }
 
   if (_.endsWith(src, '.zip') || _.endsWith(src, '.jar') || _.endsWith(src, '.war')) {
-    Logger.info(CONTEXT, 'Artifact configured, skip building.');
+    logger.info('Artifact configured, skip building.');
     return '';
   }
   return src;
@@ -98,4 +102,28 @@ export async function resolveLibPathsFromLdConf(
     envs.LD_LIBRARY_PATH = libPaths.map((p) => `/code/.s/root${p}`).join(':');
   }
   return envs;
+}
+
+export async function removeBuildCache(fcCore, baseDir, serviceName, functionName) {
+  const artifactPath = fcCore.getBuildArtifactPath(baseDir, serviceName, functionName);
+  try {
+    if (fs.pathExistsSync(artifactPath)) {
+      await new Promise((resolve) => {
+        rimraf(artifactPath, () => resolve(''));
+      });
+    }
+  } catch (_ex) {
+    /** 如果异常不阻塞主进程运行 */
+  }
+
+  try {
+    const buildFilesListJSONPath = fcCore.genBuildLinkFilesListJSONPath(
+      baseDir,
+      serviceName,
+      functionName,
+    );
+    await fs.remove(buildFilesListJSONPath);
+  } catch (_ex) {
+    /** 如果异常不阻塞主进程运行 */
+  }
 }
