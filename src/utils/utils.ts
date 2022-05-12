@@ -14,6 +14,7 @@ const { BUILD_IMAGE_ENV, enableBuildkitServer, buildkitServerPort } = process.en
 export const useKaniko = BUILD_IMAGE_ENV === FC_BACKEND;
 export const compelUseBuildkit =
   _.isEqual(enableBuildkitServer, '1') && /^\d+$/.test(buildkitServerPort || '');
+export const buildkitServerAddr = process.env.buildkitServerAddr || 'localhost';
 
 export function sleep(ms: number) {
   return new Promise((resolve) => {
@@ -108,7 +109,7 @@ export async function removeBuildCache(fcCore, baseDir, serviceName, functionNam
   try {
     if (fs.pathExistsSync(artifactPath)) {
       await new Promise((resolve) => {
-        rimraf(artifactPath, (err) => resolve(''));
+        rimraf(artifactPath, () => resolve(''));
       });
     }
   } catch (_ex) {

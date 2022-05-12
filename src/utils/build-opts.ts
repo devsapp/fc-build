@@ -39,21 +39,6 @@ async function generateMounts(absCodeUri, funcArtifactDir) {
   };
 
   return _.compact([codeMount, artifactDirMount, passwdMount]);
-
-  // const buildersLocal = {
-  //   Type: 'bind',
-  //   Source: '/Users/wb447188/Desktop/fc-builders/output/fun-install',
-  //   Target: '/usr/local/bin/fun-install',
-  //   ReadOnly: false,
-  // };
-  // const buildersLocals = {
-  //   Type: 'bind',
-  //   Source: '/Users/wb447188/Desktop/fc-builders/output/fun-install',
-  //   Target: '/usr/local/bin/s-install',
-  //   ReadOnly: false,
-  // };
-
-  // return _.compact([codeMount, artifactDirMount, passwdMount, buildersLocal, buildersLocals]);
 }
 
 export async function generateBuildContainerBuildOpts({
@@ -130,7 +115,7 @@ export async function generateBuildContainerBuildOpts({
 }
 
 export async function generateSboxOpts(payload: IBuildInput, dockerPayload, baseDir) {
-  let { useSandbox = false, customEnv } = dockerPayload;
+  const { useSandbox = false, customEnv } = dockerPayload;
   const { runtime, codeUri, environmentVariables } = payload.functionProps;
   const isTty = (useSandbox && process.stdin.isTTY) || false;
 

@@ -5,7 +5,7 @@ import rimraf from 'rimraf';
 import { lodash as _ } from '@serverless-devs/core';
 import fcBuilders from '@alicloud/fc-builders';
 import { execSync } from 'child_process';
-import { checkCodeUri, getExcludeFilesEnv, removeBuildCache } from './utils';
+import { checkCodeUri, getExcludeFilesEnv, removeBuildCache, buildkitServerAddr } from './utils';
 import { generateBuildContainerBuildOpts, generateSboxOpts } from './build-opts';
 import { dockerRun, resolvePasswdMount, startSboxContainer } from './docker';
 import { IBuildInput, ICodeUri, IBuildDir } from '../interface';
@@ -40,7 +40,6 @@ interface IUseModel {
 }
 
 export default class Builder {
-  static readonly buildkitServerAddr: string = process.env.buildkitServerAddr || 'localhost';
   static readonly stages: string[] = ['install', 'build'];
   static readonly buildkitServerPort = +process.env.buildkitServerPort || 65360;
   static readonly enableBuildkitServer = _.isEqual(process.env.enableBuildkitServer, '1');
@@ -121,9 +120,9 @@ export default class Builder {
 
     const src = checkCodeUri(codeUri);
     const funfilePath = await getFunfile({ codeUri: src, runtime, baseDir });
-    const codeSkipBuild = funfilePath || (await this.codeSkipBuild({ baseDir, codeUri, runtime }));
+    const codeSkipBuild = !(funfilePath || (await this.codeBuild({ baseDir, codeUri, runtime })));
     logger.debug(`[${this.projectName}] Code skip build: ${codeSkipBuild}.`);
-    if (!codeSkipBuild) {
+    if (!useSandbox && codeSkipBuild) {
       return {};
     }
 
@@ -200,7 +199,7 @@ export default class Builder {
     dockerFileName: string,
     imageName: string,
   ): Promise<string> {
-    const { enableBuildkitServer, buildkitServerAddr, buildkitServerPort } = Builder;
+    const { enableBuildkitServer, buildkitServerPort } = Builder;
     logger.debug(`enableBuildkitServer: ${enableBuildkitServer}`);
     logger.debug(`buildkitServerAddr: ${buildkitServerAddr}`);
     logger.debug(`buildkitServerPort: ${buildkitServerPort}`);
@@ -316,13 +315,12 @@ export default class Builder {
     );
     // exec build
     if (Builder.enableBuildkitServer) {
-      const execSyncCmd = `buildctl --addr tcp://localhost:${
-        Builder.buildkitServerPort
-      } build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(
-        dockerfilePath,
-      )} --opt filename=${path.basename(
-        dockerfilePath,
-      )} --opt target=${targetBuildStage} --output type=local,dest=${baseDir}`;
+      const execSyncCmd = `buildctl --addr tcp://${buildkitServerAddr}:${Builder.buildkitServerPort
+        } build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(
+          dockerfilePath,
+        )} --opt filename=${path.basename(
+          dockerfilePath,
+        )} --opt target=${targetBuildStage} --output type=local,dest=${baseDir}`;
 
       logger.debug(`buildInBuildtkit enableBuildkitServer execSyncCmd: ${execSyncCmd}`);
       execSync(execSyncCmd, { stdio: 'inherit' });
@@ -438,7 +436,7 @@ export default class Builder {
     await builder.build();
   }
 
-  async codeSkipBuild({ baseDir, codeUri, runtime }: INeedBuild): Promise<boolean> {
+  async codeBuild({ baseDir, codeUri, runtime }: INeedBuild): Promise<boolean> {
     const src = checkCodeUri(codeUri);
     logger.debug(`src is: ${src}`);
     if (!src) {

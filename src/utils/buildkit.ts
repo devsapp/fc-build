@@ -60,8 +60,7 @@ async function convertDockerfileToBuildkitFormat(
   fromSrcToDstPairs.forEach((pair) => {
     stages.forEach((stage) => {
       content.push(
-        `COPY --from=${stage} ${pair.src} ${
-          baseDir === pair.dst ? './' : path.relative(baseDir, pair.dst)
+        `COPY --from=${stage} ${pair.src} ${baseDir === pair.dst ? './' : path.relative(baseDir, pair.dst)
         }`,
       );
     });
@@ -99,7 +98,7 @@ export async function generateDockerfileForBuildkit(
 ) {
   logger.log('Generating dockerfile in buildkit format.');
   const { runtime } = functionConfig;
-  const { customEnv, additionalArgs } = userCustomConfig || {};
+  const { customEnv, additionalArgs, command, scriptFile } = userCustomConfig || {};
 
   const envs = await generateDockerfileEnvs(
     credentials,
@@ -136,7 +135,7 @@ export async function generateDockerfileForBuildkit(
     artifactDir: codeUri === funcArtifactDir ? '/code' : funcArtifactMountDir,
     stages,
     verbose,
-    otherPayload: { additionalArgs },
+    otherPayload: { additionalArgs, command, scriptFile },
   };
 
   const cmd = `fun-install build --json-params '${JSON.stringify(params)}'`;
@@ -190,10 +189,9 @@ async function dockerfileForBuildkit(
   if (fromSrcToDstPairsInBuild) {
     fromSrcToDstPairsInBuild.forEach((pair) =>
       content.push(
-        `COPY ${
-          contentDir === pair.src || path.resolve(contentDir) === pair.src
-            ? './'
-            : path.relative(contentDir, pair.src)
+        `COPY ${contentDir === pair.src || path.resolve(contentDir) === pair.src
+          ? './'
+          : path.relative(contentDir, pair.src)
         } ${pair.dst}`,
       ));
   }
@@ -206,10 +204,9 @@ async function dockerfileForBuildkit(
 
     fromSrcToDstPairsInOutput.forEach((pair) =>
       content.push(
-        `COPY --from=${runtime} ${pair.src} ${
-          contentDir === pair.dst || path.resolve(contentDir) === pair.dst
-            ? './'
-            : path.relative(contentDir, pair.dst)
+        `COPY --from=${runtime} ${pair.src} ${contentDir === pair.dst || path.resolve(contentDir) === pair.dst
+          ? './'
+          : path.relative(contentDir, pair.dst)
         }`,
       ));
   }

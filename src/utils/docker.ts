@@ -421,11 +421,11 @@ function waitingForContainerStopped(): any {
           // container stream
           container.destroy();
         } else {
-          const c: any = docker.getContainer(container);
+          const con: any = docker.getContainer(container);
           logger.info(`Stopping container ${container}`);
 
           jobs.push(
-            c.kill().catch((ex) => logger.debug(`kill container instance error, error is ${ex}`)),
+            con.kill().catch((ex) => logger.debug(`kill container instance error, error is ${ex}`)),
           );
         }
       } catch (error) {
@@ -458,8 +458,8 @@ export function displaySboxTips(codeUri, useSandbox) {
     `1. The local mount directory is ${codeUri}, The container instance mount directory is /code
 2. It is recommended to install the dependency into the /code directory of the instance to ensure that relevant products can be obtained after the build operation
 3. Some NPM packages will cache some information for the system version. It is recommended to add the parameter [--no-shrinkwrap] when using [npm install]${
-      useSandbox ? '\n4. Enter [exit] to exit' : ''
-    }\n`,
+  useSandbox ? '\n4. Enter [exit] to exit' : ''
+}\n`,
     'yellow',
   );
 }

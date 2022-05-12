@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs-extra';
 import logger from '../common/logger';
 import * as parser from './parser';
-import { readLines } from './utils';
+import { buildkitServerAddr, readLines } from './utils';
 import { buildImage, copyFromImage } from './docker';
 import { IServiceProps } from '../interface';
 import { formatDockerfileForBuildkit } from './buildkit';
@@ -132,7 +132,7 @@ export async function processFunfileForBuildkit(
 
   if (enableBuildkitServer) {
     execSync(
-      `buildctl --addr tcp://localhost:${buildkitServerPort} build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(
+      `buildctl --addr tcp://${buildkitServerAddr}:${buildkitServerPort} build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(
         dockerfilePath,
       )} --opt target=${targetBuildStage} --opt filename=${path.basename(
         dockerfilePath,
