@@ -164,9 +164,9 @@ export default class Builder {
     customContainerConfig: any,
     dockerfile,
   ): {
-      dockerFileName: string;
-      imageName: string;
-    } {
+    dockerFileName: string;
+    imageName: string;
+  } {
     if (_.isEmpty(customContainerConfig?.image)) {
       const errorMessage =
         'function::customContainerConfig::image atttribute value is empty in the configuration file.';
@@ -284,11 +284,11 @@ export default class Builder {
     // exec build
     if (Builder.enableBuildkitServer) {
       const execSyncCmd = `buildctl --addr tcp://${buildkitServerAddr}:${Builder.buildkitServerPort
-      } build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(
-        dockerfilePath,
-      )} --opt filename=${path.basename(
-        dockerfilePath,
-      )} --opt target=${targetBuildStage} --output type=local,dest=${baseDir}`;
+        } build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(
+          dockerfilePath,
+        )} --opt filename=${path.basename(
+          dockerfilePath,
+        )} --opt target=${targetBuildStage} --output type=local,dest=${baseDir}`;
 
       logger.debug(`buildInBuildtkit enableBuildkitServer execSyncCmd: ${execSyncCmd}`);
       execSync(execSyncCmd, { stdio: 'inherit' });
@@ -409,6 +409,12 @@ export default class Builder {
     logger.debug(`src is: ${src}`);
     if (!src) {
       return false;
+    }
+
+    const { scriptFile, command } = this.argsPayload || {};
+    if (this.useSandbox || (this.useDocker && (scriptFile || command))) {
+      logger.debug('not skip build');
+      return true;
     }
 
     const absCodeUri = path.resolve(baseDir, src);
