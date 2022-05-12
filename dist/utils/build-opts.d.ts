@@ -1,4 +1,4 @@
-import { IServiceProps, IFunctionProps, ICredentials } from '../interface';
+import { IServiceProps, IFunctionProps, ICredentials, IBuildInput } from '../interface';
 interface IBuildOpts {
     region: string;
     serviceName: string;
@@ -11,6 +11,37 @@ interface IBuildOpts {
     verbose: boolean;
     stages: string[];
     credentials: ICredentials;
+    userCustomConfig?: any;
 }
-export declare function generateBuildContainerBuildOpts({ credentials, region, serviceName, serviceProps, functionName, functionProps, baseDir, codeUri, funcArtifactDir, verbose, stages, }: IBuildOpts): Promise<any>;
+export declare function generateBuildContainerBuildOpts({ credentials, region, serviceName, serviceProps, functionName, functionProps, baseDir, codeUri, funcArtifactDir, verbose, stages, userCustomConfig, }: IBuildOpts): Promise<any>;
+export declare function generateSboxOpts(payload: IBuildInput, dockerPayload: any, baseDir: any): Promise<{
+    Image?: undefined;
+    Hostname?: undefined;
+    AttachStdin?: undefined;
+    AttachStdout?: undefined;
+    AttachStderr?: undefined;
+    User?: undefined;
+    Tty?: undefined;
+    OpenStdin?: undefined;
+    StdinOnce?: undefined;
+    Env?: undefined;
+    Cmd?: undefined;
+    HostConfig?: undefined;
+} | {
+    Image: string;
+    Hostname: string;
+    AttachStdin: any;
+    AttachStdout: boolean;
+    AttachStderr: boolean;
+    User: string;
+    Tty: boolean;
+    OpenStdin: any;
+    StdinOnce: boolean;
+    Env: string[];
+    Cmd: string[];
+    HostConfig: {
+        AutoRemove: boolean;
+        Mounts: any[];
+    };
+}>;
 export {};

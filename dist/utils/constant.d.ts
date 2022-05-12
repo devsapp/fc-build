@@ -1,4 +1,3 @@
-export declare const CONTEXT = "FC-BUILD";
 export declare const HELP: ({
     header: string;
     content: string;

@@ -26,6 +26,7 @@ const DefaultTaskFlow = __webpack_require__(11111);
 const _ = __webpack_require__(90250);
 const log = __webpack_require__(52670);
 const glob = __webpack_require__(91957);
+const command = __webpack_require__(63224);
 
 const runtimeTaskFlows = {
   'java8': {
@@ -64,7 +65,8 @@ const runtimeTaskFlows = {
   'custom': {
     [NpmTaskFlow.getManifestName()]: NpmTaskFlow,
     [PipTaskFlow.getManifestName()]: PipTaskFlow,
-    [MavenTaskFlow.getManifestName()]: MavenTaskFlow,
+    // https://github.com/devsapp/fc/issues/501
+    // [MavenTaskFlow.getManifestName()]: MavenTaskFlow,
     [ComposerTaskFlow.getManifestName()]: ComposerTaskFlow
   },
   'dotnetcore2.1': {
@@ -73,7 +75,7 @@ const runtimeTaskFlows = {
 };
 
 class Builder {
-  constructor(serviceName, functionName, sourceDir, runtime, artifactDir, verbose, stages = ['install', 'build']) {
+  constructor(serviceName, functionName, sourceDir, runtime, artifactDir, verbose, stages = ['install', 'build'], otherPayload = {}) {
     this.serviceName = serviceName;
     this.functionName = functionName;
     this.sourceDir = sourceDir;
@@ -81,7 +83,11 @@ class Builder {
     this.artifactDir = artifactDir;
     this.verbose = verbose;
     this.stages = stages;
-    
+    if (!otherPayload.runtime) { // 兼容 dotnet 
+      otherPayload.runtime = runtime;
+    }
+    this.otherPayload = otherPayload;
+
     if (this.verbose) {
       log.level = 'debug';
     }
@@ -89,6 +95,11 @@ class Builder {
 
   async build() {
     log.debug('builder begin to build, runtime is: %s, sourceDir: ', this.runtime, this.sourceDir);
+    if (this.otherPayload.command) {
+      return await command.exec(this.otherPayload.command);
+    } else if (this.otherPayload.scriptFile) {
+      return await command.execFile(this.otherPayload.scriptFile);
+    }
     const taskFlows = await Builder.detectTaskFlow(this.runtime, this.sourceDir);
 
     if (!taskFlows) {
@@ -96,7 +107,7 @@ class Builder {
     }
 
     for (let TaskFlow of taskFlows) {
-      const taskFlow = new TaskFlow(this.serviceName, this.functionName, this.sourceDir, this.artifactDir, this.stages, this.runtime);
+      const taskFlow = new TaskFlow(this.serviceName, this.functionName, this.sourceDir, this.artifactDir, this.stages, this.otherPayload);
 
       await taskFlow.start();
     }
@@ -106,12 +117,12 @@ class Builder {
     const detectTaskFlows = [];
 
     const taskFlows = runtimeTaskFlows[runtime];
-  
+
     const TaskFlow = _.find(taskFlows, (taskFlow, manifest) => {
       const res = glob.sync(manifest, {
         cwd: sourceDir
       });
-      
+
       if (res && res.length) { return true; }
     });
 
@@ -449,7 +460,13 @@ class PipTask extends InstallTask {
   async doRun() {
     await super.doRun();
 
-    const cmd = ['pip', 'install', '--user', '--upgrade', this.pkgName, ...this.additionalArgs];
+    let cmd = "";
+    // if in conda or virtual env, not need use --user
+    if ('CONDA_DEFAULT_ENV' in process.env || 'VIRTUAL_ENV' in process.env) {
+      cmd = ['pip', 'install', '--upgrade', this.pkgName, ...this.additionalArgs];
+    } else {
+      cmd = ['pip', 'install', '--user', '--upgrade', this.pkgName, ...this.additionalArgs];
+    }
 
     const pythonUserBase = path.join(this.target || path.join(this.cwd, getToolCachePath()), 'python');
 
@@ -553,8 +570,8 @@ class AptTask extends InstallTask {
   }
 
   async cleanup() {
-    log.info(green('     => ') + cyan('bash -c \'rm -rf %s/archives\''), this.cacheDir);
-    await this._exec(['bash', '-c', `sudo rm -rf ${this.cacheDir}/archives`]);
+    log.info(green('     => ') + cyan('bash -c \'rm -rf %s/archives /code/.s/tmp\''), this.cacheDir);
+    await this._exec(['bash', '-c', `sudo rm -rf ${this.cacheDir}/archives /code/.s/tmp`]);
   }
 }
 
@@ -668,8 +685,8 @@ const path = __webpack_require__(85622);
 const { generatePublishedArtifactsDir } = __webpack_require__(89550);
 
 class DotnetPublishTask extends Task {
-  constructor(sourceDir, runtime, config = 'Release') {
-    super('DotnetPublishTask');
+  constructor(sourceDir, runtime, config = 'Release', additionalArgs = []) {
+    super('DotnetPublishTask', additionalArgs);
     this.sourceDir = sourceDir;
     this.runtime = runtime;
     this.config = config;
@@ -678,7 +695,7 @@ class DotnetPublishTask extends Task {
   async run() {
     const command = 'dotnet';
     const commandArgs = [
-      'publish', '-c', this.config, '-o', generatePublishedArtifactsDir(this.sourceDir, this.runtime, this.config)
+      'publish', '-c', this.config, '-o', generatePublishedArtifactsDir(this.sourceDir, this.runtime, this.config), ...this.additionalArgs
     ];
 
     await cmd.execCommand(command, commandArgs, path.resolve(this.sourceDir));
@@ -704,15 +721,16 @@ const DOTNET_RELEASE_CONFIG_DEBUG = 'Debug';
 
 class DotnetTaskFlow extends TaskFlow {
 
-  constructor(serviceName, functionName, sourceDir, artifactDir, stages, runtime) {
+  constructor(serviceName, functionName, sourceDir, artifactDir, stages, otherPayload = {}) {
     super('DotnetTaskFlow', serviceName, functionName, sourceDir, artifactDir, stages);
-    this.runtime = runtime;
+    this.runtime = otherPayload.runtime;
+    this.otherPayload = otherPayload;
   }
 
   async init() {
-    this.buildTasks.push(new DotnetPublishTask(this.sourceDir, this.runtime, DOTNET_RELEASE_CONFIG_PUBLISH));
+    this.buildTasks.push(new DotnetPublishTask(this.sourceDir, this.runtime, DOTNET_RELEASE_CONFIG_PUBLISH, this.otherPayload.additionalArgs));
     this.buildTasks.push(new CopyDotnetArtifactsTask(this.sourceDir, this.artifactDir, this.runtime, DOTNET_RELEASE_CONFIG_PUBLISH));
-    this.localTasks.push(new DotnetPublishTask(this.sourceDir, this.runtime, DOTNET_RELEASE_CONFIG_DEBUG));
+    this.localTasks.push(new DotnetPublishTask(this.sourceDir, this.runtime, DOTNET_RELEASE_CONFIG_DEBUG, this.otherPayload.additionalArgs));
   }
 
   static getManifestName() {
@@ -763,8 +781,8 @@ const fileUitls = __webpack_require__(40065);
 const log = __webpack_require__(52670);
 
 class CopyMavenArtifactsTask extends Task {
-  constructor(sourceDir, targetDir) {
-    super('CopyMavenArtifacts');
+  constructor(sourceDir, targetDir, additionalArgs = []) {
+    super('CopyMavenArtifacts', additionalArgs);
     this.sourceDir = sourceDir;
     this.targetDir = targetDir;
   }
@@ -808,8 +826,8 @@ const log = __webpack_require__(52670);
 const manifestFileName = 'pom.xml';
 
 class MavenCompileTask extends Task {
-  constructor(artifactDir) {
-    super('MavenCompileTask');
+  constructor(artifactDir, additionalArgs =[]) {
+    super('MavenCompileTask', additionalArgs);
     this.artifactDir = artifactDir;
     this.manifestFile = path.join(this.artifactDir, manifestFileName);
   }
@@ -823,7 +841,7 @@ class MavenCompileTask extends Task {
     }
 
     const command = 'mvn';
-    const commandArgs = ['clean', 'compile'];
+    const commandArgs = ['clean', 'compile', ...this.additionalArgs];
 
     await cmd.execCommand(command, commandArgs, path.resolve(this.artifactDir));
   }
@@ -849,8 +867,8 @@ const log = __webpack_require__(52670);
 const manifestFileName = 'pom.xml';
 
 class MavenCopyDependenciesTask extends Task {
-  constructor(buildDir) {
-    super('MavenCopyDependencies');
+  constructor(buildDir, additionalArgs = []) {
+    super('MavenCopyDependencies', additionalArgs);
     this.buildDir = buildDir;
     this.manifestFile = path.join(this.buildDir, manifestFileName);
   }
@@ -887,15 +905,17 @@ const CopyMavenArtifactsTask = __webpack_require__(58676);
 
 class MavenTaskFlow extends TaskFlow {
 
-  constructor(serviceName, functionName, sourceDir, artifactDir, stages) {
+  constructor(serviceName, functionName, sourceDir, artifactDir, stages, otherPayload = {}) {
     super('MavenTaskFlow', serviceName, functionName, sourceDir, artifactDir, stages);
+    this.otherPayload = otherPayload;
     this.excludeFiles.push('target');
   }
 
   async init() {
-    this.buildTasks.push(new MavenCompileTask(this.sourceDir)); 
-    this.buildTasks.push(new MavenCopyDependenciesTask(this.sourceDir));
-    this.buildTasks.push(new CopyMavenArtifactsTask(this.sourceDir, this.artifactDir));
+    const { additionalArgs } = this.otherPayload;
+    this.buildTasks.push(new MavenCompileTask(this.sourceDir, additionalArgs));
+    this.buildTasks.push(new MavenCopyDependenciesTask(this.sourceDir, additionalArgs));
+    this.buildTasks.push(new CopyMavenArtifactsTask(this.sourceDir, this.artifactDir, additionalArgs));
   }
 
   static getManifestName() {
@@ -925,8 +945,11 @@ const _ = __webpack_require__(90250);
 const manifestFileName = 'package.json';
 
 class NpmInstallTask extends Task {
-  constructor(artifactDir, stages) {
-    super('NpmInstall');
+  constructor(artifactDir, stages, additionalArgs) {
+    if (_.isEmpty(additionalArgs)) {
+      additionalArgs = ['--production'];
+    }
+    super('NpmInstall', additionalArgs);
     this.artifactDir = artifactDir;
     this.stages = stages;
     this.manifestFile = path.join(this.artifactDir, manifestFileName);
@@ -959,10 +982,10 @@ class NpmInstallTask extends Task {
           '--silent', // keep quite, https://classic.yarnpkg.com/en/docs/cli/install#toc-yarn-install-silent
           // '--no-audit', // auditing is disabled by default, https://classic.yarnpkg.com/en/docs/cli/install#toc-yarn-install-audit
           '--pure-lockfile', // disable yarn.lock generation, https://classic.yarnpkg.com/en/docs/cli/install#toc-yarn-install-pure-lockfile
-          '--production' // only `dependencies` will be installed, https://classic.yarnpkg.com/en/docs/cli/install#toc-yarn-install-production-true-false
+          ...this.additionalArgs,
         ];
       } else {
-        commandArgs = ['install', '--silent', /*'--no-audit',*/ '--pure-lockfile'];
+        commandArgs = ['install', '--silent', /*'--no-audit',*/ '--pure-lockfile', ...this.additionalArgs];
       }
 
       await cmd.execCommand(command, commandArgs, path.resolve(this.artifactDir));
@@ -977,10 +1000,10 @@ class NpmInstallTask extends Task {
           '-q', // keep quite ?
           '--no-audit', // disable auditing, https://docs.npmjs.com/cli/v7/commands/npm-install#audit
           '--no-save', // disable package-lock.json generation, https://docs.npmjs.com/cli/v7/commands/npm-install#save
-          '--production' // only `dependencies` will be installed, https://docs.npmjs.com/cli/v7/commands/npm-install#description
+          ...this.additionalArgs,
         ];
       } else {
-        commandArgs = ['install', '-q', '--no-audit', '--no-save'];
+        commandArgs = ['install', '-q', '--no-audit', '--no-save', ...this.additionalArgs,];
       }
 
       await cmd.execCommand(command, commandArgs, path.resolve(this.artifactDir));
@@ -1013,9 +1036,9 @@ const { onlyCopyManifestFile } = __webpack_require__(89726);
 
 class NpmTaskFlow extends TaskFlow {
 
-  constructor(serviceName, functionName, sourceDir, artifactDir, stages) {
+  constructor(serviceName, functionName, sourceDir, artifactDir, stages, otherPayload = {}) {
     super('NpmTaskFlow', serviceName, functionName, sourceDir, artifactDir, stages);
-
+    this.otherPayload = otherPayload;
     this.excludeFiles.push('node_modules');
   }
 
@@ -1030,7 +1053,7 @@ class NpmTaskFlow extends TaskFlow {
         onlyCopyManifestFile(this.sourceDir, this.artifactDir, 'yarn.lock');
       }
     }
-    this.installTasks.push(new NpmInstallTask(this.artifactDir, this.stages));
+    this.installTasks.push(new NpmInstallTask(this.artifactDir, this.stages, this.otherPayload.additionalArgs));
   }
 
   static getManifestName() {
@@ -1058,8 +1081,8 @@ const log = __webpack_require__(52670);
 const manifestFileName = 'composer.json';
 
 class ComposerInstallTask extends Task {
-  constructor(artifactDir) {
-    super('ComposerInstallTask');
+  constructor(artifactDir, additionalArgs = []) {
+    super('ComposerInstallTask', additionalArgs);
     this.artifactDir = artifactDir;
     this.manifestFile = path.join(this.artifactDir, manifestFileName);
   }
@@ -1081,7 +1104,7 @@ class ComposerInstallTask extends Task {
     }
 
     const command = 'composer';
-    const commandArgs = ['install', '--no-dev', '--no-interaction', '--prefer-dist'];
+    const commandArgs = ['install', '--no-dev', '--no-interaction', '--prefer-dist', ...this.additionalArgs];
 
     await this.replaceIni('/code/', path.resolve(this.artifactDir) + '/');
     await cmd.execCommand(command, commandArgs, path.resolve(this.artifactDir), {
@@ -1125,17 +1148,18 @@ const { onlyCopyManifestFile } = __webpack_require__(89726);
 
 class ComposerTaskFlow extends TaskFlow {
 
-  constructor(serviceName, functionName, sourceDir, artifactDir, stages) {
+  constructor(serviceName, functionName, sourceDir, artifactDir, stages, otherPayload = {}) {
     super('ComposerTaskFlow', serviceName, functionName, sourceDir, artifactDir, stages);
+    this.otherPayload = otherPayload;
     this.excludeFiles.push('vendor');
   }
 
   async init() {
     const copyManifestFileStatus = onlyCopyManifestFile(this.sourceDir, this.artifactDir, ComposerTaskFlow.getManifestName());
     if (!copyManifestFileStatus) {
-      this.installTasks.push(new CopySourceTask(this.sourceDir, this.artifactDir, this.excludeFiles)); 
+      this.installTasks.push(new CopySourceTask(this.sourceDir, this.artifactDir, this.excludeFiles));
     }
-    this.installTasks.push(new ComposerInstallTask(this.artifactDir)); 
+    this.installTasks.push(new ComposerInstallTask(this.artifactDir, this.otherPayload.additionalArgs));
   }
 
   static getManifestName() {
@@ -1164,8 +1188,8 @@ const { getToolCachePath } = __webpack_require__(89726);
 const manifestFileName = 'requirements.txt';
 
 class PipInstallTask extends Task {
-  constructor(sourceDir, artifactDir) {
-    super('PipInstall');
+  constructor(sourceDir, artifactDir, additionalArgs = []) {
+    super('PipInstall', additionalArgs);
     this.sourceDir = sourceDir;
     this.manifestFile = path.join(this.sourceDir, manifestFileName);
     this.artifactDir = artifactDir;
@@ -1182,8 +1206,14 @@ class PipInstallTask extends Task {
 
     const command = 'pip';
 
-    const commandArgs = ['install', '--user', '-r', this.manifestFile];
-
+    let commandArgs = [];
+    // if in conda or virtual env, not need use --user
+    if('CONDA_DEFAULT_ENV' in process.env || 'VIRTUAL_ENV' in process.env) {
+      commandArgs = ['install', '-r', this.manifestFile, ...this.additionalArgs];
+    } else{
+      commandArgs = ['install', '--user', '-r', this.manifestFile, ...this.additionalArgs];
+    }
+    
     await cmd.execCommand(command, commandArgs, process.cwd(), Object.assign({
       'PIP_NO_WARN_SCRIPT_LOCATION': 0,
       'PIP_DISABLE_PIP_VERSION_CHECK': '1',
@@ -1211,21 +1241,23 @@ const { onlyCopyManifestFile } = __webpack_require__(89726);
 
 class PipTaskFlow extends TaskFlow {
 
-  constructor(serviceName, functionName, sourceDir, artifactDir, stages) {
+  constructor(serviceName, functionName, sourceDir, artifactDir, stages, otherPayload = {}) {
     super('PipTaskFlow', serviceName, functionName, sourceDir, artifactDir, stages);
+    this.otherPayload = otherPayload;
     this.excludeFiles.push('requirements.txt');
   }
 
   async init() {
+    const { additionalArgs } = this.otherPayload;
 
     // make sure artifactDir exist
     await fs.mkdirp(this.artifactDir);
     const copyManifestFileStatus = onlyCopyManifestFile(this.sourceDir, this.artifactDir, PipTaskFlow.getManifestName());
     if (!copyManifestFileStatus) {
-      this.installTasks.push(new PipInstallTask(this.sourceDir, this.artifactDir));
+      this.installTasks.push(new PipInstallTask(this.sourceDir, this.artifactDir, additionalArgs));
     }
 
-    this.installTasks.push(new PipInstallTask(this.sourceDir, this.artifactDir));
+    this.installTasks.push(new PipInstallTask(this.sourceDir, this.artifactDir, additionalArgs));
     this.installTasks.push(new CopySourceTask(this.sourceDir, this.artifactDir, this.excludeFiles));
   }
 
@@ -1248,8 +1280,9 @@ const log = __webpack_require__(52670);
 
 class Task {
 
-  constructor(name) {
+  constructor(name, additionalArgs = []) {
     this.name = name;
+    this.additionalArgs = additionalArgs;
   }
 
   async beforeRun() {
@@ -1520,8 +1553,24 @@ function registerCommandChecker(program) {
   });
 }
 
+async function exec(command) {
+  await child_process.spawn(command, {
+    shell: true,
+    stdio: ['inherit', 'inherit', 'inherit']
+  });
+}
+
+async function execFile(scriptFile) {
+  try {
+    await child_process.exec(`chmod 755 ${scriptFile}`);
+    await new Promise(r => setTimeout(r, 500));
+  } catch (_ex) { }
+  await exec(scriptFile);
+}
+
 module.exports = {
-  execCommand, registerCommandChecker
+  execCommand, registerCommandChecker,
+  exec, execFile,
 };
 
 /***/ }),
@@ -89023,6 +89072,91 @@ class SFTP extends EventEmitter {
       this._debug(`SFTP: Outbound: ${status} expand-path@openssh.com`);
     }
   }
+  ext_copy_data(srcHandle, srcOffset, len, dstHandle, dstOffset, cb) {
+    if (this.server)
+      throw new Error('Client-only method called in server mode');
+
+    const ext = this._extensions['copy-data'];
+    if (ext !== '1')
+      throw new Error('Server does not support this extended request');
+
+    if (!Buffer.isBuffer(srcHandle))
+      throw new Error('Source handle is not a Buffer');
+
+    if (!Buffer.isBuffer(dstHandle))
+      throw new Error('Destination handle is not a Buffer');
+
+    /*
+      uint32    id
+      string    "copy-data"
+      string    read-from-handle
+      uint64    read-from-offset
+      uint64    read-data-length
+      string    write-to-handle
+      uint64    write-to-offset
+    */
+    let p = 0;
+    const buf = Buffer.allocUnsafe(
+      4 + 1
+      + 4
+      + 4 + 9
+      + 4 + srcHandle.length
+      + 8
+      + 8
+      + 4 + dstHandle.length
+      + 8
+    );
+
+    writeUInt32BE(buf, buf.length - 4, p);
+    p += 4;
+
+    buf[p] = REQUEST.EXTENDED;
+    ++p;
+
+    const reqid = this._writeReqid = (this._writeReqid + 1) & MAX_REQID;
+    writeUInt32BE(buf, reqid, p);
+    p += 4;
+
+    writeUInt32BE(buf, 9, p);
+    p += 4;
+    buf.utf8Write('copy-data', p, 9);
+    p += 9;
+
+    writeUInt32BE(buf, srcHandle.length, p);
+    p += 4;
+    buf.set(srcHandle, p);
+    p += srcHandle.length;
+
+    for (let i = 7; i >= 0; --i) {
+      buf[p + i] = srcOffset & 0xFF;
+      srcOffset /= 256;
+    }
+    p += 8;
+
+    for (let i = 7; i >= 0; --i) {
+      buf[p + i] = len & 0xFF;
+      len /= 256;
+    }
+    p += 8;
+
+    writeUInt32BE(buf, dstHandle.length, p);
+    p += 4;
+    buf.set(dstHandle, p);
+    p += dstHandle.length;
+
+    for (let i = 7; i >= 0; --i) {
+      buf[p + i] = dstOffset & 0xFF;
+      dstOffset /= 256;
+    }
+
+    this._requests[reqid] = { cb };
+
+    const isBuffered = sendOrBuffer(this, buf);
+    if (this._debug) {
+      const status = (isBuffered ? 'Buffered' : 'Sending');
+      this._debug(`SFTP: Outbound: ${status} copy-data`);
+    }
+  }
   // ===========================================================================
   // Server-specific ===========================================================
   // ===========================================================================
@@ -89349,11 +89483,12 @@ function read_(self, handle, buf, off, len, position, cb, req_) {
         return;
       }
 
+      nb = (nb || 0);
       if (req.origOff === 0 && buf.length === req.nb)
         data = buf;
       else
-        data = bufferSlice(buf, req.origOff, req.origOff + req.nb);
-      cb(undefined, req.nb + (nb || 0), data, req.position);
+        data = bufferSlice(buf, req.origOff, req.origOff + req.nb + nb);
+      cb(undefined, req.nb + nb, data, req.position);
     },
     buffer: undefined,
   });
@@ -89843,7 +89978,8 @@ function tryWritePayload(sftp, payload) {
     return;
 
   if (outgoing.window === 0) {
-    sftp._waitWindow = true; // XXX: Unnecessary?
+    sftp._waitWindow = true;
+    sftp._chunkcb = drainBuffer;
     return payload;
   }
 
@@ -90813,7 +90949,7 @@ function ReadStream(sftp, path, options) {
   this.autoClose = options.autoClose === undefined ? true : options.autoClose;
   this.pos = 0;
   this.bytesRead = 0;
-  this.closed = false;
+  this.isClosed = false;
 
   this.handle = options.handle === undefined ? null : options.handle;
   this.sftp = sftp;
@@ -90965,7 +91101,7 @@ function closeStream(stream, cb, err) {
   function onclose(er) {
     er = er || err;
     cb(er);
-    stream.closed = true;
+    stream.isClosed = true;
     if (!er)
       stream.emit('close');
   }
@@ -91008,7 +91144,7 @@ function WriteStream(sftp, path, options) {
   this.autoClose = options.autoClose === undefined ? true : options.autoClose;
   this.pos = 0;
   this.bytesWritten = 0;
-  this.closed = false;
+  this.isClosed = false;
 
   this.handle = options.handle === undefined ? null : options.handle;
   this.sftp = sftp;
@@ -91168,7 +91304,7 @@ if (typeof WritableStream.prototype.destroy !== 'function')
 WriteStream.prototype._destroy = ReadStream.prototype._destroy;
 WriteStream.prototype.close = function(cb) {
   if (cb) {
-    if (this.closed) {
+    if (this.isClosed) {
       process.nextTick(cb);
       return;
     }
@@ -111701,7 +111837,7 @@ function version(uuid) {
      * ------------------------------------------------------------------------------------------ */
     'use strict';
     Object.defineProperty(exports, "__esModule", ({ value: true }));
-    exports.TextDocument = exports.EOL = exports.InlayHint = exports.InlayHintLabelPart = exports.InlayHintKind = exports.InlineValueContext = exports.InlineValueEvaluatableExpression = exports.InlineValueVariableLookup = exports.InlineValueText = exports.SemanticTokens = exports.SemanticTokenModifiers = exports.SemanticTokenTypes = exports.SelectionRange = exports.DocumentLink = exports.FormattingOptions = exports.CodeLens = exports.CodeAction = exports.CodeActionContext = exports.CodeActionTriggerKind = exports.CodeActionKind = exports.DocumentSymbol = exports.WorkspaceSymbol = exports.SymbolInformation = exports.SymbolTag = exports.SymbolKind = exports.DocumentHighlight = exports.DocumentHighlightKind = exports.SignatureInformation = exports.ParameterInformation = exports.Hover = exports.MarkedString = exports.CompletionList = exports.CompletionItem = exports.CompletionItemLabelDetails = exports.InsertTextMode = exports.InsertReplaceEdit = exports.CompletionItemTag = exports.InsertTextFormat = exports.CompletionItemKind = exports.MarkupContent = exports.MarkupKind = exports.TextDocumentItem = exports.OptionalVersionedTextDocumentIdentifier = exports.VersionedTextDocumentIdentifier = exports.TextDocumentIdentifier = exports.WorkspaceChange = exports.WorkspaceEdit = exports.DeleteFile = exports.RenameFile = exports.CreateFile = exports.TextDocumentEdit = exports.AnnotatedTextEdit = exports.ChangeAnnotationIdentifier = exports.ChangeAnnotation = exports.TextEdit = exports.Command = exports.Diagnostic = exports.CodeDescription = exports.DiagnosticTag = exports.DiagnosticSeverity = exports.DiagnosticRelatedInformation = exports.FoldingRange = exports.FoldingRangeKind = exports.ColorPresentation = exports.ColorInformation = exports.Color = exports.LocationLink = exports.Location = exports.Range = exports.Position = exports.uinteger = exports.integer = exports.URI = exports.DocumentUri = void 0;
+    exports.TextDocument = exports.EOL = exports.WorkspaceFolder = exports.InlayHint = exports.InlayHintLabelPart = exports.InlayHintKind = exports.InlineValueContext = exports.InlineValueEvaluatableExpression = exports.InlineValueVariableLookup = exports.InlineValueText = exports.SemanticTokens = exports.SemanticTokenModifiers = exports.SemanticTokenTypes = exports.SelectionRange = exports.DocumentLink = exports.FormattingOptions = exports.CodeLens = exports.CodeAction = exports.CodeActionContext = exports.CodeActionTriggerKind = exports.CodeActionKind = exports.DocumentSymbol = exports.WorkspaceSymbol = exports.SymbolInformation = exports.SymbolTag = exports.SymbolKind = exports.DocumentHighlight = exports.DocumentHighlightKind = exports.SignatureInformation = exports.ParameterInformation = exports.Hover = exports.MarkedString = exports.CompletionList = exports.CompletionItem = exports.CompletionItemLabelDetails = exports.InsertTextMode = exports.InsertReplaceEdit = exports.CompletionItemTag = exports.InsertTextFormat = exports.CompletionItemKind = exports.MarkupContent = exports.MarkupKind = exports.TextDocumentItem = exports.OptionalVersionedTextDocumentIdentifier = exports.VersionedTextDocumentIdentifier = exports.TextDocumentIdentifier = exports.WorkspaceChange = exports.WorkspaceEdit = exports.DeleteFile = exports.RenameFile = exports.CreateFile = exports.TextDocumentEdit = exports.AnnotatedTextEdit = exports.ChangeAnnotationIdentifier = exports.ChangeAnnotation = exports.TextEdit = exports.Command = exports.Diagnostic = exports.CodeDescription = exports.DiagnosticTag = exports.DiagnosticSeverity = exports.DiagnosticRelatedInformation = exports.FoldingRange = exports.FoldingRangeKind = exports.ColorPresentation = exports.ColorInformation = exports.Color = exports.LocationLink = exports.Location = exports.Range = exports.Position = exports.uinteger = exports.integer = exports.URI = exports.DocumentUri = void 0;
     var DocumentUri;
     (function (DocumentUri) {
         function is(value) {
@@ -111927,22 +112063,22 @@ function version(uuid) {
         ColorPresentation.is = is;
     })(ColorPresentation = exports.ColorPresentation || (exports.ColorPresentation = {}));
     /**
-     * Enum of known range kinds
+     * A set of predefined range kinds.
      */
     var FoldingRangeKind;
     (function (FoldingRangeKind) {
         /**
          * Folding range for a comment
          */
-        FoldingRangeKind["Comment"] = "comment";
+        FoldingRangeKind.Comment = 'comment';
         /**
          * Folding range for a imports or includes
          */
-        FoldingRangeKind["Imports"] = "imports";
+        FoldingRangeKind.Imports = 'imports';
         /**
          * Folding range for a region (e.g. `#region`)
          */
-        FoldingRangeKind["Region"] = "region";
+        FoldingRangeKind.Region = 'region';
     })(FoldingRangeKind = exports.FoldingRangeKind || (exports.FoldingRangeKind = {}));
     /**
      * The folding range namespace provides helper functions to work with
@@ -111953,7 +112089,7 @@ function version(uuid) {
         /**
          * Creates a new FoldingRange literal.
          */
-        function create(startLine, endLine, startCharacter, endCharacter, kind) {
+        function create(startLine, endLine, startCharacter, endCharacter, kind, collapsedText) {
             var result = {
                 startLine: startLine,
                 endLine: endLine
@@ -111966,6 +112102,9 @@ function version(uuid) {
             }
             if (Is.defined(kind)) {
                 result.kind = kind;
+            }
+            if (Is.defined(collapsedText)) {
+                result.collapsedText = collapsedText;
             }
             return result;
         }
@@ -112770,8 +112909,6 @@ function version(uuid) {
          * Markdown is supported as a content format
          */
         MarkupKind.Markdown = 'markdown';
-    })(MarkupKind = exports.MarkupKind || (exports.MarkupKind = {}));
-    (function (MarkupKind) {
         /**
          * Checks whether the given value is a value of the [MarkupKind](#MarkupKind) type.
          */
@@ -113264,7 +113401,7 @@ function version(uuid) {
     /**
      * The reason why code actions were requested.
      *
-     * @since 3.17.0 - proposed state
+     * @since 3.17.0
      */
     var CodeActionTriggerKind;
     (function (CodeActionTriggerKind) {
@@ -113510,7 +113647,7 @@ function version(uuid) {
     /**
      * The InlineValueText namespace provides functions to deal with InlineValueTexts.
      *
-     * @since 3.17.0 - proposed state
+     * @since 3.17.0
      */
     var InlineValueText;
     (function (InlineValueText) {
@@ -113551,7 +113688,7 @@ function version(uuid) {
     /**
      * The InlineValueEvaluatableExpression namespace provides functions to deal with InlineValueEvaluatableExpression.
      *
-     * @since 3.17.0 - proposed state
+     * @since 3.17.0
      */
     var InlineValueEvaluatableExpression;
     (function (InlineValueEvaluatableExpression) {
@@ -113573,7 +113710,7 @@ function version(uuid) {
      * The InlineValueContext namespace provides helper functions to work with
      * [InlineValueContext](#InlineValueContext) literals.
      *
-     * @since 3.17.0 - proposed state
+     * @since 3.17.0
      */
     var InlineValueContext;
     (function (InlineValueContext) {
@@ -113596,7 +113733,7 @@ function version(uuid) {
     /**
      * Inlay hint kinds.
      *
-     * @since 3.17.0 - proposed state
+     * @since 3.17.0
      */
     var InlayHintKind;
     (function (InlayHintKind) {
@@ -113650,6 +113787,14 @@ function version(uuid) {
         }
         InlayHint.is = is;
     })(InlayHint = exports.InlayHint || (exports.InlayHint = {}));
+    var WorkspaceFolder;
+    (function (WorkspaceFolder) {
+        function is(value) {
+            var candidate = value;
+            return Is.objectLiteral(candidate) && URI.is(candidate.uri) && Is.string(candidate.name);
+        }
+        WorkspaceFolder.is = is;
+    })(WorkspaceFolder = exports.WorkspaceFolder || (exports.WorkspaceFolder = {}));
     exports.EOL = ['\n', '\r\n', '\r'];
     /**
      * @deprecated Use the text document from the new vscode-languageserver-textdocument package.
@@ -119557,6 +119702,65 @@ try {
 
 /***/ }),
 
+/***/ 93783:
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __assign = (this && this.__assign) || function () {
+    __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var core_1 = __webpack_require__(67782);
+var logger_1 = __importDefault(__webpack_require__(88989));
+var APTS = {
+    string: ['dockerfile', 'custom-env', 'custom-args'],
+    boolean: ['help', 'use-sandbox', 'use-docker', 'use-buildkit', 'clean-useless-image'],
+    alias: { dockerfile: 'f', 'use-docker': 'd', help: 'h' },
+};
+exports.default = (function (inputs, complexParames) {
+    if (complexParames === void 0) { complexParames = []; }
+    var argsObj = inputs.argsObj;
+    if (core_1.lodash.isEmpty(argsObj) || core_1.lodash.isEmpty(complexParames)) {
+        return core_1.commandParse(inputs, APTS).data || {};
+    }
+    var complex = {};
+    for (var _i = 0, complexParames_1 = complexParames; _i < complexParames_1.length; _i++) {
+        var complexParame = complexParames_1[_i];
+        var inputsKey = "--" + complexParame; // --custom-args
+        var inputsQqualKey = "--" + complexParame + "="; // --custom-args=
+        if (argsObj.includes(inputsKey)) {
+            var complexKeyIndex = argsObj.indexOf(inputsKey);
+            complex[complexParame] = argsObj[complexKeyIndex + 1];
+            argsObj.splice(complexKeyIndex, 2);
+        }
+        else if (argsObj.includes(inputsQqualKey)) {
+            var complexKeyIndex = argsObj.indexOf(inputsQqualKey);
+            complex[complexParame] = argsObj[complexKeyIndex].replace(inputsQqualKey, '');
+            argsObj.splice(complexKeyIndex, 1);
+        }
+    }
+    // @ts-ignore
+    var argsData = core_1.commandParse({ argsObj: argsObj }, APTS).data || {};
+    var argsPayload = __assign(__assign({}, argsData), complex);
+    logger_1.default.debug("argsPayload: " + JSON.stringify(argsPayload));
+    return argsPayload;
+});
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiZmlsZTovLy9Vc2Vycy93YjQ0NzE4OC9EZXNrdG9wL25ldy1yZXBvL2ZjLWJ1aWxkL3NyYy9jb21tYW5kUGFyc2UudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7Ozs7Ozs7OztBQUFBLDhDQUFrRTtBQUNsRSwyREFBcUM7QUFFckMsSUFBTSxJQUFJLEdBQUc7SUFDWCxNQUFNLEVBQUUsQ0FBQyxZQUFZLEVBQUUsWUFBWSxFQUFFLGFBQWEsQ0FBQztJQUNuRCxPQUFPLEVBQUUsQ0FBQyxNQUFNLEVBQUUsYUFBYSxFQUFFLFlBQVksRUFBRSxjQUFjLEVBQUUscUJBQXFCLENBQUM7SUFDckYsS0FBSyxFQUFFLEVBQUUsVUFBVSxFQUFFLEdBQUcsRUFBRSxZQUFZLEVBQUUsR0FBRyxFQUFFLElBQUksRUFBRSxHQUFHLEVBQUU7Q0FDekQsQ0FBQztBQUVGLG1CQUFlLFVBQUMsTUFBVyxFQUFFLGNBQTZCO0lBQTdCLCtCQUFBLEVBQUEsbUJBQTZCO0lBQ2hELElBQUEsT0FBTyxHQUFLLE1BQU0sUUFBWCxDQUFZO0lBQzNCLElBQUksYUFBQyxDQUFDLE9BQU8sQ0FBQyxPQUFPLENBQUMsSUFBSSxhQUFDLENBQUMsT0FBTyxDQUFDLGNBQWMsQ0FBQyxFQUFFO1FBQ25ELE9BQU8sbUJBQVksQ0FBQyxNQUFNLEVBQUUsSUFBSSxDQUFDLENBQUMsSUFBSSxJQUFJLEVBQUUsQ0FBQztLQUM5QztJQUVELElBQU0sT0FBTyxHQUFRLEVBQUUsQ0FBQztJQUN4QixLQUE0QixVQUFjLEVBQWQsaUNBQWMsRUFBZCw0QkFBYyxFQUFkLElBQWMsRUFBRTtRQUF2QyxJQUFNLGFBQWEsdUJBQUE7UUFDdEIsSUFBTSxTQUFTLEdBQUcsT0FBSyxhQUFlLENBQUMsQ0FBQyxnQkFBZ0I7UUFDeEQsSUFBTSxjQUFjLEdBQUcsT0FBSyxhQUFhLE1BQUcsQ0FBQyxDQUFDLGlCQUFpQjtRQUMvRCxJQUFJLE9BQU8sQ0FBQyxRQUFRLENBQUMsU0FBUyxDQUFDLEVBQUU7WUFDL0IsSUFBTSxlQUFlLEdBQUcsT0FBTyxDQUFDLE9BQU8sQ0FBQyxTQUFTLENBQUMsQ0FBQztZQUNuRCxPQUFPLENBQUMsYUFBYSxDQUFDLEdBQUcsT0FBTyxDQUFDLGVBQWUsR0FBRyxDQUFDLENBQUMsQ0FBQztZQUV0RCxPQUFPLENBQUMsTUFBTSxDQUFDLGVBQWUsRUFBRSxDQUFDLENBQUMsQ0FBQztTQUNwQzthQUFNLElBQUksT0FBTyxDQUFDLFFBQVEsQ0FBQyxjQUFjLENBQUMsRUFBRTtZQUMzQyxJQUFNLGVBQWUsR0FBRyxPQUFPLENBQUMsT0FBTyxDQUFDLGNBQWMsQ0FBQyxDQUFDO1lBQ3hELE9BQU8sQ0FBQyxhQUFhLENBQUMsR0FBRyxPQUFPLENBQUMsZUFBZSxDQUFDLENBQUMsT0FBTyxDQUFDLGNBQWMsRUFBRSxFQUFFLENBQUMsQ0FBQztZQUU5RSxPQUFPLENBQUMsTUFBTSxDQUFDLGVBQWUsRUFBRSxDQUFDLENBQUMsQ0FBQztTQUNwQztLQUNGO0lBQ0QsYUFBYTtJQUNiLElBQU0sUUFBUSxHQUFHLG1CQUFZLENBQUMsRUFBRSxPQUFPLFNBQUEsRUFBRSxFQUFFLElBQUksQ0FBQyxDQUFDLElBQUksSUFBSSxFQUFFLENBQUM7SUFFNUQsSUFBTSxXQUFXLHlCQUFRLFFBQVEsR0FBSyxPQUFPLENBQUUsQ0FBQztJQUNoRCxnQkFBTSxDQUFDLEtBQUssQ0FBQyxrQkFBZ0IsSUFBSSxDQUFDLFNBQVMsQ0FBQyxXQUFXLENBQUcsQ0FBQyxDQUFDO0lBRTVELE9BQU8sV0FBVyxDQUFDO0FBQ3JCLENBQUMsRUFBQyJ9
+
+/***/ }),
+
 /***/ 88989:
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -119564,35 +119768,9 @@ try {
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 var core_1 = __webpack_require__(67782);
-var ComponentLogger = /** @class */ (function () {
-    function ComponentLogger() {
-    }
-    ComponentLogger.setContent = function (content) {
-        ComponentLogger.CONTENT = content;
-    };
-    ComponentLogger.log = function (m, color) {
-        core_1.Logger.log(m, color);
-    };
-    ComponentLogger.info = function (m) {
-        core_1.Logger.info(ComponentLogger.CONTENT, m);
-    };
-    ComponentLogger.debug = function (m) {
-        core_1.Logger.debug(ComponentLogger.CONTENT, m);
-    };
-    ComponentLogger.error = function (m) {
-        core_1.Logger.error(ComponentLogger.CONTENT, m);
-    };
-    ComponentLogger.warning = function (m) {
-        core_1.Logger.warn(ComponentLogger.CONTENT, m);
-    };
-    ComponentLogger.success = function (m) {
-        core_1.Logger.log(m, 'green');
-    };
-    ComponentLogger.CONTENT = '';
-    return ComponentLogger;
-}());
-exports.default = ComponentLogger;
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoibG9nZ2VyLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiZmlsZTovLy9Vc2Vycy93YjQ0NzE4OC9EZXNrdG9wL25ldy1yZXBvL2ZjLWJ1aWxkL3NyYy9jb21tb24vbG9nZ2VyLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7O0FBQ0EsOENBQStDO0FBRS9DO0lBQUE7SUE0QkEsQ0FBQztJQTFCUSwwQkFBVSxHQUFqQixVQUFrQixPQUFPO1FBQ3ZCLGVBQWUsQ0FBQyxPQUFPLEdBQUcsT0FBTyxDQUFDO0lBQ3BDLENBQUM7SUFDTSxtQkFBRyxHQUFWLFVBQVcsQ0FBQyxFQUFFLEtBQTZHO1FBQ3pILGFBQU0sQ0FBQyxHQUFHLENBQUMsQ0FBQyxFQUFFLEtBQUssQ0FBQyxDQUFDO0lBQ3ZCLENBQUM7SUFDTSxvQkFBSSxHQUFYLFVBQVksQ0FBQztRQUNYLGFBQU0sQ0FBQyxJQUFJLENBQUMsZUFBZSxDQUFDLE9BQU8sRUFBRSxDQUFDLENBQUMsQ0FBQztJQUMxQyxDQUFDO0lBRU0scUJBQUssR0FBWixVQUFhLENBQUM7UUFDWixhQUFNLENBQUMsS0FBSyxDQUFDLGVBQWUsQ0FBQyxPQUFPLEVBQUUsQ0FBQyxDQUFDLENBQUM7SUFDM0MsQ0FBQztJQUVNLHFCQUFLLEdBQVosVUFBYSxDQUFDO1FBQ1osYUFBTSxDQUFDLEtBQUssQ0FBQyxlQUFlLENBQUMsT0FBTyxFQUFFLENBQUMsQ0FBQyxDQUFDO0lBQzNDLENBQUM7SUFFTSx1QkFBTyxHQUFkLFVBQWUsQ0FBQztRQUNkLGFBQU0sQ0FBQyxJQUFJLENBQUMsZUFBZSxDQUFDLE9BQU8sRUFBRSxDQUFDLENBQUMsQ0FBQztJQUMxQyxDQUFDO0lBR00sdUJBQU8sR0FBZCxVQUFlLENBQUM7UUFDZCxhQUFNLENBQUMsR0FBRyxDQUFDLENBQUMsRUFBRSxPQUFPLENBQUMsQ0FBQztJQUN6QixDQUFDO0lBMUJNLHVCQUFPLEdBQUcsRUFBRSxDQUFDO0lBMkJ0QixzQkFBQztDQUFBLEFBNUJELElBNEJDO2tCQTVCb0IsZUFBZSJ9
+var logger = new core_1.Logger('FC-BUILD');
+exports.default = logger;
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoibG9nZ2VyLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiZmlsZTovLy9Vc2Vycy93YjQ0NzE4OC9EZXNrdG9wL25ldy1yZXBvL2ZjLWJ1aWxkL3NyYy9jb21tb24vbG9nZ2VyLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7O0FBQUEsOENBQStDO0FBRS9DLElBQU0sTUFBTSxHQUFHLElBQUksYUFBTSxDQUFDLFVBQVUsQ0FBQyxDQUFDO0FBRXRDLGtCQUFlLE1BQU0sQ0FBQyJ9
 
 /***/ }),
 
@@ -119642,87 +119820,101 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 var core_1 = __webpack_require__(67782);
+var path_1 = __importDefault(__webpack_require__(85622));
 var builder_1 = __importDefault(__webpack_require__(5671));
 var constant_1 = __webpack_require__(89381);
 var logger_1 = __importDefault(__webpack_require__(88989));
-var logger_2 = __webpack_require__(17870);
-logger_1.default.setContent(constant_1.CONTEXT);
+var utils_1 = __webpack_require__(80239);
+var commandParse_1 = __importDefault(__webpack_require__(93783));
 var Build = /** @class */ (function () {
     function Build() {
     }
     Build.prototype.build = function (inputs) {
-        var _a, _b, _c, _d;
+        var _a;
         return __awaiter(this, void 0, void 0, function () {
-            var projectName, apts, argsData, _e, dockerfile, h, useBuildkit, useDocker, cleanUselessImage, useKaniko, _f, region, serviceProps, functionProps, runtime, fcCore, serviceName, functionName, params, _g, _h, builder, output, buildOutput;
-            return __generator(this, function (_j) {
-                switch (_j.label) {
+            var projectName, _b, h, _c, dockerfile, useBuildkit, useDocker, cleanUselessImage, customEnv, customArgs, useSandbox, command, scriptFile, showError, _d, region, serviceProps, functionProps, runtime, functionName, serviceName, params, buildkit, _e, _f, useModel, argsPayload, configPath, configDirPath, fcCore, builder, buildOutput, output;
+            return __generator(this, function (_g) {
+                switch (_g.label) {
                     case 0:
                         logger_1.default.info('Build artifact start...');
-                        projectName = (_a = inputs.project) === null || _a === void 0 ? void 0 : _a.projectName;
+                        projectName = core_1.lodash.get(inputs, 'project.projectName');
                         logger_1.default.debug("[" + projectName + "]inputs params: " + JSON.stringify(inputs.props));
-                        apts = {
-                            string: ['dockerfile'],
-                            boolean: ['help', 'use-docker', 'use-buildkit', 'clean-useless-image'],
-                            alias: { dockerfile: 'f', 'use-docker': 'd', help: 'h' },
-                        };
-                        argsData = core_1.commandParse(inputs, apts).data || {};
-                        _e = argsData.dockerfile, dockerfile = _e === void 0 ? '' : _e, h = argsData.h;
-                        useBuildkit = argsData['use-buildkit'];
-                        useDocker = argsData['use-docker'];
-                        cleanUselessImage = argsData['clean-useless-image'];
-                        useKaniko = process.env.BUILD_IMAGE_ENV === constant_1.FC_BACKEND;
+                        _b = commandParse_1.default(inputs, ['custom-args']), h = _b.h, _c = _b.dockerfile, dockerfile = _c === void 0 ? '' : _c, useBuildkit = _b["use-buildkit"], useDocker = _b["use-docker"], cleanUselessImage = _b["clean-useless-image"], customEnv = _b["custom-env"], customArgs = _b["custom-args"], useSandbox = _b["use-sandbox"], command = _b.command, scriptFile = _b["script-file"];
                         if (h) {
                             core_1.help(constant_1.HELP);
                             return [2 /*return*/];
                         }
-                        _f = inputs.props, region = _f.region, serviceProps = _f.service, functionProps = _f.function;
-                        runtime = functionProps.runtime;
-                        return [4 /*yield*/, core_1.loadComponent('devsapp/fc-core')];
-                    case 1:
-                        fcCore = _j.sent();
+                        if (customEnv) {
+                            try {
+                                JSON.parse(customEnv);
+                            }
+                            catch (_ex) {
+                                showError = "The parameter passed in by --custom-env is not a standard JSON format: " + customEnv;
+                                throw new core_1.CatchableError(showError);
+                            }
+                        }
+                        _d = inputs.props, region = _d.region, serviceProps = _d.service, functionProps = _d.function;
+                        runtime = functionProps.runtime, functionName = functionProps.name;
+                        logger_1.default.debug("[" + projectName + "] Runtime is " + runtime + ".");
                         if (!runtime) {
-                            throw new fcCore.CatchableError('Parameter function.runtime is required');
+                            throw new core_1.CatchableError('Parameter function.runtime is required');
                         }
                         serviceName = serviceProps.name;
-                        functionName = functionProps.name;
                         params = {
                             region: region,
                             serviceProps: serviceProps,
                             functionProps: functionProps,
                             serviceName: serviceName,
+                            dockerfile: dockerfile,
                             cleanUselessImage: cleanUselessImage,
                             functionName: functionName,
                             credentials: {
+                                // buildkit 需要密钥信息
                                 AccountID: '',
                                 AccessKeyID: '',
                                 AccessKeySecret: '',
                                 SecurityToken: '',
                             },
                         };
-                        if (!(useBuildkit || useKaniko)) return [3 /*break*/, 5];
-                        logger_2.logger.debug("params add credentials becase useBuildkit=" + useBuildkit + " or useKaniko=" + useKaniko);
-                        _g = params;
-                        if (!((_b = inputs.credentials) === null || _b === void 0 ? void 0 : _b.AccountID)) return [3 /*break*/, 2];
-                        _h = inputs.credentials;
-                        return [3 /*break*/, 4];
-                    case 2: return [4 /*yield*/, core_1.getCredential((_c = inputs.project) === null || _c === void 0 ? void 0 : _c.access)];
+                        buildkit = useBuildkit || utils_1.compelUseBuildkit;
+                        if (!(buildkit || utils_1.useKaniko)) return [3 /*break*/, 4];
+                        logger_1.default.debug("credentials becase useBuildkit=" + buildkit + " or useKaniko=" + utils_1.useKaniko);
+                        _e = params;
+                        if (!core_1.lodash.isEmpty(inputs.credentials)) return [3 /*break*/, 1];
+                        _f = inputs.credentials;
+                        return [3 /*break*/, 3];
+                    case 1: return [4 /*yield*/, core_1.getCredential((_a = inputs.project) === null || _a === void 0 ? void 0 : _a.access)];
+                    case 2:
+                        _f = _g.sent();
+                        _g.label = 3;
                     case 3:
-                        _h = _j.sent();
-                        _j.label = 4;
+                        _e.credentials = _f;
+                        _g.label = 4;
                     case 4:
-                        _g.credentials = _h;
-                        _j.label = 5;
-                    case 5: return [4 /*yield*/, fcCore.setBuildState(serviceName, functionName, '', { status: 'unavailable' })];
-                    case 6:
-                        _j.sent();
-                        builder = new builder_1.default(projectName, useDocker, dockerfile, (_d = inputs === null || inputs === void 0 ? void 0 : inputs.path) === null || _d === void 0 ? void 0 : _d.configPath, useBuildkit, fcCore);
-                        output = {
-                            props: inputs.props,
+                        useModel = { useSandbox: useSandbox, useKaniko: utils_1.useKaniko, useBuildkit: buildkit, useDocker: useDocker };
+                        argsPayload = {
+                            customEnv: customEnv ? JSON.parse(customEnv) : undefined,
+                            additionalArgs: customArgs ? customArgs.split(' ') : [],
+                            scriptFile: scriptFile,
+                            command: command,
                         };
+                        configPath = core_1.lodash.get(inputs, 'path.configPath');
+                        configDirPath = configPath ? path_1.default.dirname(configPath) : process.cwd();
+                        return [4 /*yield*/, core_1.loadComponent('devsapp/fc-core')];
+                    case 5:
+                        fcCore = _g.sent();
+                        builder = new builder_1.default(projectName, configDirPath, fcCore, useModel, argsPayload);
+                        return [4 /*yield*/, fcCore.setBuildState(serviceName, functionName, '', { status: 'unavailable' })];
+                    case 6:
+                        _g.sent(); // 设置 build 开始状态
                         return [4 /*yield*/, builder.build(params)];
                     case 7:
-                        buildOutput = _j.sent();
+                        buildOutput = _g.sent();
+                        return [4 /*yield*/, fcCore.setBuildState(serviceName, functionName, '', { status: 'available' })];
+                    case 8:
+                        _g.sent(); // 设置 build 结束状态
                         logger_1.default.debug("[" + projectName + "] Build output: " + JSON.stringify(buildOutput));
+                        output = { props: inputs.props };
                         if (buildOutput.buildSaveUri) {
                             output.buildSaveUri = buildOutput.buildSaveUri;
                         }
@@ -119730,9 +119922,6 @@ var Build = /** @class */ (function () {
                             output.image = buildOutput.image;
                         }
                         logger_1.default.info('Build artifact successfully.');
-                        return [4 /*yield*/, fcCore.setBuildState(serviceName, functionName, '', { status: 'available' })];
-                    case 8:
-                        _j.sent();
                         return [2 /*return*/, output];
                 }
             });
@@ -119741,7 +119930,7 @@ var Build = /** @class */ (function () {
     return Build;
 }());
 exports.default = Build;
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiZmlsZTovLy9Vc2Vycy93YjQ0NzE4OC9EZXNrdG9wL25ldy1yZXBvL2ZjLWJ1aWxkL3NyYy9pbmRleC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7OztBQUFBLDhDQUF5RjtBQUN6Riw0REFBc0M7QUFFdEMsNkNBQTZEO0FBQzdELDJEQUFxQztBQUNyQyw0REFBMkQ7QUFFM0QsZ0JBQU0sQ0FBQyxVQUFVLENBQUMsa0JBQU8sQ0FBQyxDQUFDO0FBTzNCO0lBQUE7SUFzRUEsQ0FBQztJQXJFTyxxQkFBSyxHQUFYLFVBQVksTUFBZTs7Ozs7Ozt3QkFDekIsZ0JBQU0sQ0FBQyxJQUFJLENBQUMseUJBQXlCLENBQUMsQ0FBQzt3QkFDakMsV0FBVyxTQUFHLE1BQU0sQ0FBQyxPQUFPLDBDQUFFLFdBQVcsQ0FBQzt3QkFDaEQsZ0JBQU0sQ0FBQyxLQUFLLENBQUMsTUFBSSxXQUFXLHdCQUFtQixJQUFJLENBQUMsU0FBUyxDQUFDLE1BQU0sQ0FBQyxLQUFLLENBQUcsQ0FBQyxDQUFDO3dCQUV6RSxJQUFJLEdBQUc7NEJBQ1gsTUFBTSxFQUFFLENBQUMsWUFBWSxDQUFDOzRCQUN0QixPQUFPLEVBQUUsQ0FBQyxNQUFNLEVBQUUsWUFBWSxFQUFFLGNBQWMsRUFBRSxxQkFBcUIsQ0FBQzs0QkFDdEUsS0FBSyxFQUFFLEVBQUUsVUFBVSxFQUFFLEdBQUcsRUFBRSxZQUFZLEVBQUUsR0FBRyxFQUFFLElBQUksRUFBRSxHQUFHLEVBQUU7eUJBQ3pELENBQUM7d0JBQ0ksUUFBUSxHQUFRLG1CQUFZLENBQUMsTUFBTSxFQUFFLElBQUksQ0FBQyxDQUFDLElBQUksSUFBSSxFQUFFLENBQUM7d0JBQ3BELEtBQTRCLFFBQVEsV0FBckIsRUFBZixVQUFVLG1CQUFHLEVBQUUsS0FBQSxFQUFFLENBQUMsR0FBVSxRQUFRLEVBQWxCLENBQW1CO3dCQUN2QyxXQUFX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
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiZmlsZTovLy9Vc2Vycy93YjQ0NzE4OC9EZXNrdG9wL25ldy1yZXBvL2ZjLWJ1aWxkL3NyYy9pbmRleC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7OztBQUFBLDhDQU0rQjtBQUMvQiw4Q0FBd0I7QUFDeEIsNERBQXNDO0FBRXRDLDZDQUF3QztBQUN4QywyREFBcUM7QUFDckMsdUNBQTZEO0FBQzdELGdFQUEwQztBQVExQztJQUFBO0lBNkZBLENBQUM7SUE1Rk8scUJBQUssR0FBWCxVQUFZLE1BQWU7Ozs7Ozs7d0JBQ3pCLGdCQUFNLENBQUMsSUFBSSxDQUFDLHlCQUF5QixDQUFDLENBQUM7d0JBQ2pDLFdBQVcsR0FBRyxhQUFDLENBQUMsR0FBRyxDQUFDLE1BQU0sRUFBRSxxQkFBcUIsQ0FBQyxDQUFDO3dCQUN6RCxnQkFBTSxDQUFDLEtBQUssQ0FBQyxNQUFJLFdBQVcsd0JBQW1CLElBQUksQ0FBQyxTQUFTLENBQUMsTUFBTSxDQUFDLEtBQUssQ0FBRyxDQUFDLENBQUM7d0JBRXpFLEtBV0csc0JBQVksQ0FBQyxNQUFNLEVBQUUsQ0FBQyxhQUFhLENBQUMsQ0FBQyxFQVY1QyxDQUFDLE9BQUEsRUFDRCxrQkFBZSxFQUFmLFVBQVUsbUJBQUcsRUFBRSxLQUFBLEVBQ0MsV0FBVyxxQkFBQSxFQUNiLFNBQVMsbUJBQUEsRUFDQSxpQkFBaUIsNEJBQUEsRUFDMUIsU0FBUyxtQkFBQSxFQUNSLFVBQVUsb0JBQUEsRUFDVixVQUFVLG9CQUFBLEVBQ3pCLE9BQU8sYUFBQSxFQUNRLFVBQVUsb0JBQUEsQ0FDb0I7d0JBRS9DLElBQUksQ0FBQyxFQUFFOzRCQUNMLFdBQUksQ0FBQyxlQUFJLENBQUMsQ0FBQzs0QkFDWCxzQkFBTzt5QkFDUjt3QkFDRCxJQUFJLFNBQVMsRUFBRTs0QkFDYixJQUFJO2dDQUNGLElBQUksQ0FBQyxLQUFLLENBQUMs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
 
 /***/ }),
 
@@ -119809,22 +119998,48 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.generateBuildContainerBuildOpts = void 0;
-var lodash_1 = __importDefault(__webpack_require__(90250));
+exports.generateSboxOpts = exports.generateBuildContainerBuildOpts = void 0;
+var core_1 = __webpack_require__(67782);
 var path_1 = __importDefault(__webpack_require__(85622));
 var nested_object_assign_1 = __importDefault(__webpack_require__(18806));
 var docker = __importStar(__webpack_require__(55041));
 var get_image_name_1 = __webpack_require__(25231);
 var install_file_1 = __webpack_require__(87018);
 var env_1 = __webpack_require__(53251);
-function generateBuildContainerBuildOpts(_a) {
-    var credentials = _a.credentials, region = _a.region, serviceName = _a.serviceName, serviceProps = _a.serviceProps, functionName = _a.functionName, functionProps = _a.functionProps, baseDir = _a.baseDir, codeUri = _a.codeUri, funcArtifactDir = _a.funcArtifactDir, verbose = _a.verbose, stages = _a.stages;
+var logger_1 = __importDefault(__webpack_require__(88989));
+var utils_1 = __webpack_require__(80239);
+var funcArtifactMountDir = '/artifactsMount';
+function generateMounts(absCodeUri, funcArtifactDir) {
     return __awaiter(this, void 0, void 0, function () {
-        var runtime, containerName, envs, codeMount, passwdMount, funcArtifactMountDir, artifactDirMount, mounts, params, cmd, imageName, filePath, opts;
+        var codeMount, passwdMount, artifactDirMount;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0: return [4 /*yield*/, docker.resolveCodeUriToMount(absCodeUri, false)];
+                case 1:
+                    codeMount = _a.sent();
+                    return [4 /*yield*/, docker.resolvePasswdMount()];
+                case 2:
+                    passwdMount = _a.sent();
+                    artifactDirMount = {
+                        Type: 'bind',
+                        Source: funcArtifactDir,
+                        Target: funcArtifactMountDir,
+                        ReadOnly: false,
+                    };
+                    return [2 /*return*/, core_1.lodash.compact([codeMount, artifactDirMount, passwdMount])];
+            }
+        });
+    });
+}
+function generateBuildContainerBuildOpts(_a) {
+    var credentials = _a.credentials, region = _a.region, serviceName = _a.serviceName, serviceProps = _a.serviceProps, functionName = _a.functionName, functionProps = _a.functionProps, baseDir = _a.baseDir, codeUri = _a.codeUri, funcArtifactDir = _a.funcArtifactDir, verbose = _a.verbose, stages = _a.stages, userCustomConfig = _a.userCustomConfig;
+    return __awaiter(this, void 0, void 0, function () {
+        var runtime, additionalArgs, customEnv, containerName, envs, mounts, params, cmd, imageName, filePath, opts;
         return __generator(this, function (_b) {
             switch (_b.label) {
                 case 0:
                     runtime = functionProps.runtime;
+                    additionalArgs = userCustomConfig.additionalArgs, customEnv = userCustomConfig.customEnv;
                     containerName = docker.generateRamdomContainerName();
                     return [4 /*yield*/, docker.generateDockerEnvs({
                             region: region,
@@ -119834,23 +120049,12 @@ function generateBuildContainerBuildOpts(_a) {
                             functionName: functionName,
                             credentials: credentials,
                             functionProps: functionProps,
-                        })];
+                        }, customEnv)];
                 case 1:
                     envs = _b.sent();
-                    return [4 /*yield*/, docker.resolveCodeUriToMount(path_1.default.resolve(baseDir, codeUri), false)];
+                    return [4 /*yield*/, generateMounts(path_1.default.resolve(baseDir, codeUri), funcArtifactDir)];
                 case 2:
-                    codeMount = _b.sent();
-                    return [4 /*yield*/, docker.resolvePasswdMount()];
-                case 3:
-                    passwdMount = _b.sent();
-                    funcArtifactMountDir = '/artifactsMount';
-                    artifactDirMount = {
-                        Type: 'bind',
-                        Source: funcArtifactDir,
-                        Target: funcArtifactMountDir,
-                        ReadOnly: false,
-                    };
-                    mounts = lodash_1.default.compact([codeMount, artifactDirMount, passwdMount]);
+                    mounts = _b.sent();
                     params = {
                         method: 'build',
                         serviceName: serviceName,
@@ -119860,18 +120064,19 @@ function generateBuildContainerBuildOpts(_a) {
                         artifactDir: codeUri === funcArtifactDir ? '/code' : funcArtifactMountDir,
                         stages: stages,
                         verbose: verbose,
+                        otherPayload: { additionalArgs: additionalArgs },
                     };
                     cmd = ['fun-install', 'build', '--json-params', JSON.stringify(params)];
                     return [4 /*yield*/, install_file_1.getFunfile({ codeUri: codeUri, runtime: runtime, baseDir: baseDir })];
-                case 4:
+                case 3:
                     filePath = _b.sent();
-                    if (!filePath) return [3 /*break*/, 6];
+                    if (!filePath) return [3 /*break*/, 5];
                     return [4 /*yield*/, install_file_1.processFunfile(serviceName, codeUri, filePath, funcArtifactDir, runtime, functionName)];
-                case 5:
+                case 4:
                     imageName = _b.sent();
-                    _b.label = 6;
-                case 6: return [4 /*yield*/, generateContainerBuildOpts(runtime, containerName, mounts, cmd, envs, imageName)];
-                case 7:
+                    _b.label = 5;
+                case 5: return [4 /*yield*/, generateContainerBuildOpts(runtime, containerName, mounts, cmd, envs, imageName)];
+                case 6:
                     opts = _b.sent();
                     return [2 /*return*/, opts];
             }
@@ -119879,6 +120084,69 @@ function generateBuildContainerBuildOpts(_a) {
     });
 }
 exports.generateBuildContainerBuildOpts = generateBuildContainerBuildOpts;
+function generateSboxOpts(payload, dockerPayload, baseDir) {
+    return __awaiter(this, void 0, void 0, function () {
+        var _a, useSandbox, customEnv, _b, runtime, codeUri, environmentVariables, isTty, imageName, src, codeResolvePath, params, cmd, mounts, envs;
+        return __generator(this, function (_c) {
+            switch (_c.label) {
+                case 0:
+                    _a = dockerPayload.useSandbox, useSandbox = _a === void 0 ? false : _a, customEnv = dockerPayload.customEnv;
+                    _b = payload.functionProps, runtime = _b.runtime, codeUri = _b.codeUri, environmentVariables = _b.environmentVariables;
+                    isTty = (useSandbox && process.stdin.isTTY) || false;
+                    return [4 /*yield*/, get_image_name_1.resolveRuntimeToDockerImage(runtime)];
+                case 1:
+                    imageName = _c.sent();
+                    if (!imageName) {
+                        throw new Error("invalid runtime name " + runtime);
+                    }
+                    src = utils_1.checkCodeUri(codeUri);
+                    if (!src) {
+                        return [2 /*return*/, {}];
+                    }
+                    codeResolvePath = path_1.default.resolve(baseDir, src);
+                    params = {
+                        // 执行自定义
+                        method: 'build',
+                        otherPayload: dockerPayload,
+                    };
+                    cmd = useSandbox
+                        ? ['/bin/bash']
+                        : ['fun-install', 'build', '--json-params', JSON.stringify(params)];
+                    docker.displaySboxTips(codeResolvePath, useSandbox);
+                    return [4 /*yield*/, generateMounts(codeResolvePath, codeResolvePath)];
+                case 2:
+                    mounts = _c.sent();
+                    envs = core_1.lodash.assign({}, Object.assign(environmentVariables || {}, customEnv || {}));
+                    if (useSandbox) {
+                        envs.S_SANDBOX = 's_sandbox'; // 控制 s-install
+                    }
+                    logger_1.default.debug("runtime: " + runtime);
+                    logger_1.default.debug("mounts: " + mounts);
+                    logger_1.default.debug("isTty: " + isTty);
+                    logger_1.default.debug("isInteractive: " + useSandbox);
+                    logger_1.default.debug("isInteractive: " + cmd);
+                    return [2 /*return*/, {
+                            Image: imageName,
+                            Hostname: "fc-" + runtime,
+                            AttachStdin: useSandbox,
+                            AttachStdout: true,
+                            AttachStderr: true,
+                            User: resolveDockerUser(),
+                            Tty: isTty,
+                            OpenStdin: useSandbox,
+                            StdinOnce: true,
+                            Env: resolveDockerEnv(envs),
+                            Cmd: !core_1.lodash.isEmpty(cmd) ? cmd : ['/bin/bash'],
+                            HostConfig: {
+                                AutoRemove: true,
+                                Mounts: mounts,
+                            },
+                        }];
+            }
+        });
+    });
+}
+exports.generateSboxOpts = generateSboxOpts;
 function generateContainerBuildOpts(runtime, containerName, mounts, cmd, envs, imageName) {
     return __awaiter(this, void 0, void 0, function () {
         var hostOpts, ioOpts, opts, _a, _b, _c;
@@ -119932,9 +120200,9 @@ function resolveDockerUser() {
 }
 function resolveDockerEnv(envs) {
     if (envs === void 0) { envs = {}; }
-    return lodash_1.default.map(env_1.addEnv(envs || {}), function (v, k) { return k + "=" + v; });
+    return core_1.lodash.map(env_1.addEnv(envs || {}), function (v, k) { return k + "=" + v; });
 }
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiYnVpbGQtb3B0cy5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbImZpbGU6Ly8vVXNlcnMvd2I0NDcxODgvRGVza3RvcC9uZXctcmVwby9mYy1idWlsZC9zcmMvdXRpbHMvYnVpbGQtb3B0cy50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7O0FBQUEsa0RBQXVCO0FBQ3ZCLDhDQUF3QjtBQUN4Qiw4RUFBc0Q7QUFDdEQsK0NBQW1DO0FBRW5DLG1EQUErRDtBQUMvRCwrQ0FBNEQ7QUFDNUQsNkJBQStCO0FBZ0IvQixTQUFzQiwrQkFBK0IsQ0FBQyxFQVl6QztRQVhYLFdBQVcsaUJBQUEsRUFDWCxNQUFNLFlBQUEsRUFDTixXQUFXLGlCQUFBLEVBQ1gsWUFBWSxrQkFBQSxFQUNaLFlBQVksa0JBQUEsRUFDWixhQUFhLG1CQUFBLEVBQ2IsT0FBTyxhQUFBLEVBQ1AsT0FBTyxhQUFBLEVBQ1AsZUFBZSxxQkFBQSxFQUNmLE9BQU8sYUFBQSxFQUNQLE1BQU0sWUFBQTs7Ozs7O29CQUVFLE9BQU8sR0FBSyxhQUFhLFFBQWxCLENBQW1CO29CQUU1QixhQUFhLEdBQUcsTUFBTSxDQUFDLDJCQUEyQixFQUFFLENBQUM7b0JBRzlDLHFCQUFNLE1BQU0sQ0FBQyxrQkFBa0IsQ0FBQzs0QkFDM0MsTUFBTSxRQUFBOzRCQUNOLE9BQU8sU0FBQTs0QkFDUCxXQUFXLGFBQUE7NEJBQ1gsWUFBWSxjQUFBOzRCQUNaLFlBQVksY0FBQTs0QkFDWixXQUFXLGFBQUE7NEJBQ1gsYUFBYSxlQUFBO3lCQUNkLENBQUMsRUFBQTs7b0JBUkksSUFBSSxHQUFHLFNBUVg7b0JBRWdCLHFCQUFNLE1BQU0sQ0FBQyxxQkFBcUIsQ0FBQyxjQUFJLENBQUMsT0FBTyxDQUFDLE9BQU8sRUFBRSxPQUFPLENBQUMsRUFBRSxLQUFLLENBQUMsRUFBQTs7b0JBQXJGLFNBQVMsR0FBRyxTQUF5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
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiYnVpbGQtb3B0cy5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbImZpbGU6Ly8vVXNlcnMvd2I0NDcxODgvRGVza3RvcC9uZXctcmVwby9mYy1idWlsZC9zcmMvdXRpbHMvYnVpbGQtb3B0cy50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7O0FBQUEsOENBQW9EO0FBQ3BELDhDQUF3QjtBQUN4Qiw4RUFBc0Q7QUFDdEQsK0NBQW1DO0FBRW5DLG1EQUErRDtBQUMvRCwrQ0FBNEQ7QUFDNUQsNkJBQStCO0FBQy9CLDREQUFzQztBQUN0QyxpQ0FBdUM7QUFpQnZDLElBQU0sb0JBQW9CLEdBQUcsaUJBQWlCLENBQUM7QUFFL0MsU0FBZSxjQUFjLENBQUMsVUFBVSxFQUFFLGVBQWU7Ozs7O3dCQUNyQyxxQkFBTSxNQUFNLENBQUMscUJBQXFCLENBQUMsVUFBVSxFQUFFLEtBQUssQ0FBQyxFQUFBOztvQkFBakUsU0FBUyxHQUFHLFNBQXFEO29CQUVuRCxxQkFBTSxNQUFNLENBQUMsa0JBQWtCLEVBQUUsRUFBQTs7b0JBQS9DLFdBQVcsR0FBRyxTQUFpQztvQkFFL0MsZ0JBQWdCLEdBQUc7d0JBQ3ZCLElBQUksRUFBRSxNQUFNO3dCQUNaLE1BQU0sRUFBRSxlQUFlO3dCQUN2QixNQUFNLEVBQUUsb0JBQW9CO3dCQUM1QixRQUFRLEVBQUUsS0FBSztxQkFDaEIsQ0FBQztvQkFFRixzQkFBTyxhQUFDLENBQUMsT0FBTyxDQUFDLENBQUMsU0FBUyxFQUFFLGdCQUFnQixFQUFFLFdBQVcsQ0FBQyxDQUFDLEVBQUM7Ozs7Q0FDOUQ7QUFFRCxTQUFzQiwrQkFBK0IsQ0FBQyxFQWF6QztRQVpYLFdBQVcsaUJBQUEsRUFDWCxNQUFNLFlBQUEsRUFDTixXQUFXLGlCQUFBLEVBQ1gsWUFBWSxrQkFBQSxFQUNaLFlBQVksa0JBQUEsRUFDWixhQUFhLG1CQUFBLEVBQ2Is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
 
 /***/ }),
 
@@ -119943,14 +120211,16 @@ function resolveDockerEnv(envs) {
 
 "use strict";
 
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+var __assign = (this && this.__assign) || function () {
+    __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
 };
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -119992,77 +120262,171 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-var core_1 = __webpack_require__(67782);
 var dockerode_1 = __importDefault(__webpack_require__(14571));
 var fs_extra_1 = __importDefault(__webpack_require__(5630));
 var path_1 = __importDefault(__webpack_require__(85622));
 var rimraf_1 = __importDefault(__webpack_require__(14959));
-var lodash_1 = __importDefault(__webpack_require__(90250));
+var core_1 = __webpack_require__(67782);
 var fc_builders_1 = __importDefault(__webpack_require__(61468));
 var child_process_1 = __webpack_require__(63129);
 var utils_1 = __webpack_require__(80239);
 var build_opts_1 = __webpack_require__(39295);
 var docker_1 = __webpack_require__(55041);
-var constant_1 = __webpack_require__(89381);
 var install_file_1 = __webpack_require__(87018);
 var buildkit_1 = __webpack_require__(95317);
 var mock_cr_login_1 = __webpack_require__(63400);
+var logger_1 = __importDefault(__webpack_require__(88989));
 var Builder = /** @class */ (function () {
-    function Builder(projectName, useDocker, dockerfile, configPath, useBuildkit, fcCore) {
+    function Builder(projectName, configDirPath, fcCore, useModel, argsPayload) {
+        if (argsPayload === void 0) { argsPayload = {}; }
         this.fcCore = fcCore;
         this.projectName = projectName;
-        this.dockerfile = dockerfile;
-        this.configDirPath = configPath ? path_1.default.dirname(configPath) : process.cwd();
-        // set useDocker and useBuildkit
-        var escapeDockerArgsInBuildFC = +process.env.escapeDockerArgsInBuildFC;
-        var setBuildkitArgsDefaultInBuildFC = +process.env.setBuildkitArgsDefaultInBuildFC;
-        var enableBuildkitServer = +process.env.enableBuildkitServer;
-        var buildkitServerPort = +process.env.buildkitServerPort;
-        var buildkitServerAddr = process.env.buildkitServerAddr;
-        if (setBuildkitArgsDefaultInBuildFC) {
-            this.logger.debug('set useBuildkit arg default when building function');
-            this.useDocker = false;
-            this.useBuildkit = true;
-        }
-        else if (useDocker && escapeDockerArgsInBuildFC) {
-            this.logger.debug('escape useDocker arg when building function');
-            this.useDocker = false;
-            this.useBuildkit = true;
+        this.configDirPath = configDirPath;
+        this.argsPayload = argsPayload;
+        var scriptFile = argsPayload.scriptFile, command = argsPayload.command;
+        var useKaniko = useModel.useKaniko, useBuildkit = useModel.useBuildkit, useSandbox = useModel.useSandbox, useDocker = useModel.useDocker;
+        if (useKaniko) {
+            logger_1.default.log('Use kaniko for building');
+            this.useKaniko = useKaniko;
         }
         else if (useBuildkit) {
-            if (useDocker) {
-                this.logger.warn('--use-buildkit and --use-docker both exist, fc will use buildkit to build.');
-            }
-            this.useDocker = false;
+            logger_1.default.info('Use buildkit for building');
             this.useBuildkit = true;
         }
-        else if (useDocker) {
+        else if (useSandbox) {
+            logger_1.default.info('Use sandbox');
+            this.useSandbox = true;
+        }
+        else if (useDocker || scriptFile || command) {
+            logger_1.default.info('Use docker for building');
             this.useDocker = true;
-            this.useBuildkit = false;
         }
-        this.enableBuildkitServer = enableBuildkitServer === 1;
-        if (this.enableBuildkitServer) {
-            if (!this.useBuildkit) {
-                this.logger.warn('useBuildkit flag is set false, enableBuildkitServer environment is not working.');
-                this.enableBuildkitServer = false;
-            }
-            else {
-                this.buildkitServerAddr = buildkitServerAddr || Builder.defaultbuildkitServerAddr;
-                this.buildkitServerPort = buildkitServerPort || Builder.defaultbuildkitServerPort;
-            }
-        }
-        this.buildImageEnv = process.env.BUILD_IMAGE_ENV;
-        if (this.buildImageEnv === constant_1.FC_BACKEND) {
-            this.useDocker = false;
-            this.useBuildkit = false;
+        else {
+            logger_1.default.info('build use model useLocal');
         }
     }
-    Builder.prototype.checkCustomContainerConfig = function (customContainerConfig) {
-        if (lodash_1.default.isEmpty(customContainerConfig === null || customContainerConfig === void 0 ? void 0 : customContainerConfig.image)) {
+    Builder.prototype.build = function (buildInput) {
+        var _a, _b;
+        return __awaiter(this, void 0, void 0, function () {
+            var _c, useSandbox, useKaniko, useDocker, useBuildkit, baseDir, argsPayload, functionProps, cleanUselessImage, dockerfile, serviceName, functionName, codeUri, runtime, customContainerConfig, isContainer, _d, dockerFileName, imageName, image, src, funfilePath, codeSkipBuild, _e, resolvedCodeUri, buildLinkParams, initBuildArtifactDirParams, buildSaveUri, dockerPayload, opts;
+            return __generator(this, function (_f) {
+                switch (_f.label) {
+                    case 0:
+                        _c = this, useSandbox = _c.useSandbox, useKaniko = _c.useKaniko, useDocker = _c.useDocker, useBuildkit = _c.useBuildkit, baseDir = _c.configDirPath, argsPayload = _c.argsPayload;
+                        functionProps = buildInput.functionProps, cleanUselessImage = buildInput.cleanUselessImage, dockerfile = buildInput.dockerfile, serviceName = buildInput.serviceName, functionName = buildInput.functionName;
+                        codeUri = functionProps.codeUri, runtime = functionProps.runtime, customContainerConfig = functionProps.customContainerConfig;
+                        isContainer = runtime === 'custom-container';
+                        if (!(useDocker || useSandbox)) return [3 /*break*/, 2];
+                        return [4 /*yield*/, ((_b = (_a = this.fcCore).preExecute) === null || _b === void 0 ? void 0 : _b.call(_a, new dockerode_1.default(), cleanUselessImage))];
+                    case 1:
+                        _f.sent();
+                        _f.label = 2;
+                    case 2:
+                        if (!isContainer) return [3 /*break*/, 9];
+                        _d = this.checkCustomContainerConfig(customContainerConfig, dockerfile), dockerFileName = _d.dockerFileName, imageName = _d.imageName;
+                        image = void 0;
+                        if (!useKaniko) return [3 /*break*/, 4];
+                        return [4 /*yield*/, this.buildImageWithKaniko(buildInput, dockerFileName, imageName)];
+                    case 3:
+                        image = _f.sent();
+                        return [3 /*break*/, 8];
+                    case 4:
+                        if (!useBuildkit) return [3 /*break*/, 6];
+                        return [4 /*yield*/, this.buildImageWithBuildkit(buildInput, dockerFileName, imageName)];
+                    case 5:
+                        image = _f.sent();
+                        return [3 /*break*/, 8];
+                    case 6: return [4 /*yield*/, this.buildImage(dockerFileName, imageName)];
+                    case 7:
+                        image = _f.sent();
+                        _f.label = 8;
+                    case 8: return [2 /*return*/, { image: image }];
+                    case 9:
+                        src = utils_1.checkCodeUri(codeUri);
+                        return [4 /*yield*/, install_file_1.getFunfile({ codeUri: src, runtime: runtime, baseDir: baseDir })];
+                    case 10:
+                        funfilePath = _f.sent();
+                        _e = funfilePath;
+                        if (_e) return [3 /*break*/, 12];
+                        return [4 /*yield*/, this.codeBuild({ baseDir: baseDir, codeUri: codeUri, runtime: runtime })];
+                    case 11:
+                        _e = (_f.sent());
+                        _f.label = 12;
+                    case 12:
+                        codeSkipBuild = !(_e);
+                        logger_1.default.debug("[" + this.projectName + "] Code skip build: " + codeSkipBuild + ".");
+                        if (!useSandbox && codeSkipBuild) {
+                            return [2 /*return*/, {}];
+                        }
+                        resolvedCodeUri = path_1.default.isAbsolute(src) ? src : path_1.default.join(baseDir, src);
+                        buildLinkParams = {
+                            configDirPath: baseDir,
+                            codeUri: src,
+                            runtime: runtime,
+                            serviceName: buildInput.serviceName,
+                            functionName: buildInput.functionName,
+                        };
+                        initBuildArtifactDirParams = {
+                            baseDir: baseDir,
+                            serviceName: serviceName,
+                            functionName: functionName,
+                        };
+                        return [4 /*yield*/, this.initBuildArtifactDir(initBuildArtifactDirParams)];
+                    case 13:
+                        buildSaveUri = _f.sent();
+                        if (!useKaniko) return [3 /*break*/, 16];
+                        return [4 /*yield*/, utils_1.removeBuildCache(this.fcCore, baseDir, serviceName, functionName)];
+                    case 14:
+                        _f.sent();
+                        return [4 /*yield*/, this.buildArtifact(buildInput, baseDir, resolvedCodeUri, resolvedCodeUri)];
+                    case 15:
+                        _f.sent();
+                        return [3 /*break*/, 28];
+                    case 16:
+                        if (!useBuildkit) return [3 /*break*/, 18];
+                        return [4 /*yield*/, this.buildInBuildtkit(buildInput, baseDir, resolvedCodeUri, buildSaveUri, funfilePath)];
+                    case 17:
+                        _f.sent();
+                        return [3 /*break*/, 28];
+                    case 18:
+                        if (!(useSandbox || argsPayload.command || argsPayload.scriptFile)) return [3 /*break*/, 22];
+                        dockerPayload = __assign({ useSandbox: useSandbox }, argsPayload);
+                        return [4 /*yield*/, build_opts_1.generateSboxOpts(buildInput, dockerPayload, baseDir)];
+                    case 19:
+                        opts = _f.sent();
+                        if (!!core_1.lodash.isEmpty(opts)) return [3 /*break*/, 21];
+                        return [4 /*yield*/, docker_1.startSboxContainer(opts)];
+                    case 20:
+                        _f.sent();
+                        _f.label = 21;
+                    case 21: return [3 /*break*/, 28];
+                    case 22:
+                        if (!(useDocker || funfilePath)) return [3 /*break*/, 25];
+                        return [4 /*yield*/, this.buildInDocker(buildInput, baseDir, resolvedCodeUri, buildSaveUri)];
+                    case 23:
+                        _f.sent();
+                        return [4 /*yield*/, this.fcCore.buildLink(buildLinkParams, false)];
+                    case 24:
+                        _f.sent();
+                        return [3 /*break*/, 28];
+                    case 25: return [4 /*yield*/, this.buildArtifact(buildInput, baseDir, resolvedCodeUri, buildSaveUri)];
+                    case 26:
+                        _f.sent();
+                        return [4 /*yield*/, this.fcCore.buildLink(buildLinkParams, false)];
+                    case 27:
+                        _f.sent();
+                        _f.label = 28;
+                    case 28: return [2 /*return*/, { buildSaveUri: buildSaveUri }];
+                }
+            });
+        });
+    };
+    Builder.prototype.checkCustomContainerConfig = function (customContainerConfig, dockerfile) {
+        if (core_1.lodash.isEmpty(customContainerConfig === null || customContainerConfig === void 0 ? void 0 : customContainerConfig.image)) {
             var errorMessage = 'function::customContainerConfig::image atttribute value is empty in the configuration file.';
             throw new this.fcCore.CatchableError(errorMessage);
         }
-        var dockerFileName = path_1.default.resolve(this.dockerfile || 'Dockerfile');
+        var dockerFileName = path_1.default.resolve(dockerfile || 'Dockerfile');
         if (!fs_extra_1.default.existsSync(dockerFileName)) {
             var msg = 'Cannot find the Dockerfile file, please make sure the Dockerfile file exists in the current working directory, or specify the Dockerfile file path through --dockerfile <path>';
             throw new this.fcCore.CatchableError(msg);
@@ -120072,216 +120436,93 @@ var Builder = /** @class */ (function () {
             imageName: customContainerConfig.image,
         };
     };
-    Builder.prototype.buildImageWithBuildkit = function (buildInput) {
+    Builder.prototype.buildImageWithBuildkit = function (buildInput, dockerFileName, imageName) {
         return __awaiter(this, void 0, void 0, function () {
-            var customContainerConfig, _a, dockerFileName, imageName;
-            return __generator(this, function (_b) {
-                switch (_b.label) {
+            var enableBuildkitServer, buildkitServerPort, execSyncCmd, execSyncCmd;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
                     case 0:
-                        customContainerConfig = buildInput.functionProps.customContainerConfig;
-                        _a = this.checkCustomContainerConfig(customContainerConfig), dockerFileName = _a.dockerFileName, imageName = _a.imageName;
-                        this.logger.debug("enableBuildkitServer: " + this.enableBuildkitServer + ", buildkitServerAddr: " + this.buildkitServerAddr + ", buildkitServerPort: " + this.buildkitServerPort);
-                        if (!this.enableBuildkitServer) return [3 /*break*/, 2];
+                        enableBuildkitServer = Builder.enableBuildkitServer, buildkitServerPort = Builder.buildkitServerPort;
+                        logger_1.default.debug("enableBuildkitServer: " + enableBuildkitServer);
+                        logger_1.default.debug("buildkitServerAddr: " + utils_1.buildkitServerAddr);
+                        logger_1.default.debug("buildkitServerPort: " + buildkitServerPort);
+                        if (!enableBuildkitServer) return [3 /*break*/, 2];
                         return [4 /*yield*/, mock_cr_login_1.mockDockerConfigFile(buildInput.region, imageName, buildInput.credentials)];
                     case 1:
-                        _b.sent();
-                        child_process_1.execSync("buildctl --addr tcp://" + this.buildkitServerAddr + ":" + this.buildkitServerPort + " build --no-cache             --frontend dockerfile.v0             --local context=" + path_1.default.dirname(dockerFileName) + "             --local dockerfile=" + path_1.default.dirname(dockerFileName) + "             --output type=image,name=" + imageName + ",push=true", {
-                            stdio: 'inherit',
-                        });
+                        _a.sent();
+                        execSyncCmd = "buildctl --addr tcp://" + utils_1.buildkitServerAddr + ":" + buildkitServerPort + " build --no-cache       --frontend dockerfile.v0       --local context=" + path_1.default.dirname(dockerFileName) + "       --local dockerfile=" + path_1.default.dirname(dockerFileName) + "       --output type=image,name=" + imageName + ",push=true";
+                        logger_1.default.debug("buildImageWithBuildkit enableBuildkitServer execSync:\n" + execSyncCmd);
+                        child_process_1.execSync(execSyncCmd, { stdio: 'inherit' });
                         return [3 /*break*/, 3];
                     case 2:
-                        child_process_1.execSync("buildctl build --no-cache             --frontend dockerfile.v0             --local context=" + path_1.default.dirname(dockerFileName) + "             --local dockerfile=" + path_1.default.dirname(dockerFileName) + "             --output type=image,name=" + imageName, {
-                            stdio: 'inherit',
-                        });
-                        _b.label = 3;
+                        execSyncCmd = "buildctl build --no-cache       --frontend dockerfile.v0       --local context=" + path_1.default.dirname(dockerFileName) + "       --local dockerfile=" + path_1.default.dirname(dockerFileName) + "       --output type=image,name=" + imageName;
+                        logger_1.default.debug("buildImageWithBuildkit execSync:\n" + execSyncCmd);
+                        child_process_1.execSync(execSyncCmd, { stdio: 'inherit' });
+                        _a.label = 3;
                     case 3: return [2 /*return*/, imageName];
                 }
             });
         });
     };
-    Builder.prototype.buildImageWithKaniko = function (buildInput) {
+    Builder.prototype.buildImageWithKaniko = function (buildInput, dockerFileName, imageName) {
         return __awaiter(this, void 0, void 0, function () {
-            var customContainerConfig, _a, dockerFileName, imageName, files;
-            return __generator(this, function (_b) {
-                switch (_b.label) {
+            var execSyncCmd;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
                     case 0:
-                        customContainerConfig = buildInput.functionProps.customContainerConfig;
-                        _a = this.checkCustomContainerConfig(customContainerConfig), dockerFileName = _a.dockerFileName, imageName = _a.imageName;
+                        logger_1.default.info('start to build image ...');
                         return [4 /*yield*/, mock_cr_login_1.mockDockerConfigFile(buildInput.region, imageName, buildInput.credentials)];
                     case 1:
-                        _b.sent();
-                        this.logger.info('start to build image ...');
-                        child_process_1.execSync("executor  --force=true --cache=false --use-new-run=true                 --dockerfile " + dockerFileName + "                 --context  " + path_1.default.dirname(dockerFileName) + "                 --destination " + imageName + " ", {
-                            stdio: 'inherit',
-                        });
-                        files = fs_extra_1.default.readdirSync('/usr/local/lib');
-                        files.forEach(function (name) {
-                            if (name.startsWith('python3')) {
-                                var ver = parseFloat(name.substr(8));
-                                if (ver > 6) {
-                                    console.log("rm -rf /usr/local/lib/" + name + "/site-packages");
-                                    child_process_1.execSync("rm -rf /usr/local/lib/" + name + "/site-packages");
-                                }
-                            }
-                            else if (name.startsWith('python2')) {
-                                console.log("rm -rf /usr/local/lib/" + name + "/site-packages");
-                                child_process_1.execSync("rm -rf /usr/local/lib/" + name + "/site-packages");
-                                child_process_1.execSync("rm /usr/local/bin/pip" + name.substr(6));
-                                child_process_1.execSync('rm /usr/local/bin/pip2');
-                            }
-                        });
-                        // reset
-                        child_process_1.execSync('rm -rf /usr/local/bin/python3');
-                        child_process_1.execSync('ln -s /usr/local/bin/python3.6 /usr/local/bin/python3');
-                        child_process_1.execSync('rm -rf /usr/local/bin/python');
-                        child_process_1.execSync('ln -s /usr/local/bin/python3 /usr/local/bin/python');
+                        _a.sent();
+                        execSyncCmd = "executor --force=true --cache=false --use-new-run=true --dockerfile " + dockerFileName + " --context " + path_1.default.dirname(dockerFileName) + " --destination " + imageName;
+                        logger_1.default.debug("buildImageWithKaniko execSync:\n" + execSyncCmd);
+                        child_process_1.execSync(execSyncCmd, { stdio: 'inherit' });
                         return [2 /*return*/, imageName];
                 }
             });
         });
     };
-    Builder.prototype.buildImage = function (buildInput) {
+    Builder.prototype.buildImage = function (dockerFileName, imageName) {
         return __awaiter(this, void 0, void 0, function () {
-            var customContainerConfig, _a, dockerFileName, imageName;
-            return __generator(this, function (_b) {
-                customContainerConfig = buildInput.functionProps.customContainerConfig;
-                _a = this.checkCustomContainerConfig(customContainerConfig), dockerFileName = _a.dockerFileName, imageName = _a.imageName;
-                this.logger.info('Building image...');
+            return __generator(this, function (_a) {
+                logger_1.default.info('Building image...');
                 child_process_1.execSync("docker build -t " + imageName + " -f " + dockerFileName + " .", {
                     stdio: 'inherit',
                     cwd: path_1.default.dirname(dockerFileName),
                 });
-                this.logger.log("Build image(" + imageName + ") successfully");
+                logger_1.default.log("Build image(" + imageName + ") successfully");
                 return [2 /*return*/, imageName];
-            });
-        });
-    };
-    Builder.prototype.build = function (buildInput) {
-        var _a, _b;
-        return __awaiter(this, void 0, void 0, function () {
-            var _c, useDocker, useBuildkit, functionProps, cleanUselessImage, codeUri, runtime, baseDir, isContainer, image, src, funfilePath, codeSkipBuild, _d, resolvedCodeUri, funcArtifactDir, buildSaveUri;
-            return __generator(this, function (_e) {
-                switch (_e.label) {
-                    case 0:
-                        _c = this, useDocker = _c.useDocker, useBuildkit = _c.useBuildkit;
-                        functionProps = buildInput.functionProps, cleanUselessImage = buildInput.cleanUselessImage;
-                        codeUri = functionProps.codeUri, runtime = functionProps.runtime;
-                        baseDir = this.configDirPath;
-                        isContainer = runtime === 'custom-container';
-                        if (useBuildkit) {
-                            this.logger.info('Use buildkit for building.');
-                        }
-                        if (!isContainer) return [3 /*break*/, 3];
-                        if (!useDocker) return [3 /*break*/, 2];
-                        return [4 /*yield*/, ((_b = (_a = this.fcCore).preExecute) === null || _b === void 0 ? void 0 : _b.call(_a, new dockerode_1.default(), cleanUselessImage))];
-                    case 1:
-                        _e.sent();
-                        this.logger.info('Use docker for building.');
-                        return [3 /*break*/, 3];
-                    case 2:
-                        if (this.buildImageEnv === constant_1.FC_BACKEND) {
-                            this.logger.debug('Use Kaniko for building.');
-                        }
-                        _e.label = 3;
-                    case 3:
-                        this.logger.debug("[" + this.projectName + "] Runtime is " + runtime + ".");
-                        if (!isContainer) return [3 /*break*/, 10];
-                        image = void 0;
-                        if (!(this.buildImageEnv === constant_1.FC_BACKEND)) return [3 /*break*/, 5];
-                        return [4 /*yield*/, this.buildImageWithKaniko(buildInput)];
-                    case 4:
-                        image = _e.sent();
-                        return [2 /*return*/, { image: image }];
-                    case 5:
-                        if (!this.useBuildkit) return [3 /*break*/, 7];
-                        return [4 /*yield*/, this.buildImageWithBuildkit(buildInput)];
-                    case 6:
-                        image = _e.sent();
-                        return [3 /*break*/, 9];
-                    case 7: return [4 /*yield*/, this.buildImage(buildInput)];
-                    case 8:
-                        image = _e.sent();
-                        _e.label = 9;
-                    case 9: return [2 /*return*/, { image: image }];
-                    case 10:
-                        src = utils_1.checkCodeUri(codeUri);
-                        return [4 /*yield*/, install_file_1.getFunfile({ codeUri: src, runtime: runtime, baseDir: baseDir })];
-                    case 11:
-                        funfilePath = _e.sent();
-                        _d = funfilePath;
-                        if (_d) return [3 /*break*/, 13];
-                        return [4 /*yield*/, this.codeSkipBuild({ baseDir: baseDir, codeUri: codeUri, runtime: runtime })];
-                    case 12:
-                        _d = (_e.sent());
-                        _e.label = 13;
-                    case 13:
-                        codeSkipBuild = _d;
-                        this.logger.debug("[" + this.projectName + "] Code skip build: " + codeSkipBuild + ".");
-                        if (!codeSkipBuild) {
-                            return [2 /*return*/, {}];
-                        }
-                        resolvedCodeUri = path_1.default.isAbsolute(src) ? src : path_1.default.join(baseDir, src);
-                        return [4 /*yield*/, this.initBuildArtifactDir({ baseDir: baseDir, serviceName: buildInput.serviceProps.name, functionName: buildInput.functionProps.name })];
-                    case 14:
-                        funcArtifactDir = _e.sent();
-                        buildSaveUri = funcArtifactDir;
-                        if (!useBuildkit) return [3 /*break*/, 16];
-                        return [4 /*yield*/, this.buildInBuildtkit(buildInput, baseDir, resolvedCodeUri, funcArtifactDir, funfilePath)];
-                    case 15:
-                        _e.sent();
-                        return [3 /*break*/, 20];
-                    case 16:
-                        if (!(useDocker || funfilePath)) return [3 /*break*/, 18];
-                        return [4 /*yield*/, this.buildInDocker(buildInput, baseDir, resolvedCodeUri, funcArtifactDir)];
-                    case 17:
-                        _e.sent();
-                        return [3 /*break*/, 20];
-                    case 18: return [4 /*yield*/, this.buildArtifact(buildInput, baseDir, resolvedCodeUri, funcArtifactDir)];
-                    case 19:
-                        _e.sent();
-                        _e.label = 20;
-                    case 20: return [4 /*yield*/, this.fcCore.buildLink({
-                            configDirPath: baseDir,
-                            codeUri: src,
-                            runtime: runtime,
-                            serviceName: buildInput.serviceName,
-                            functionName: buildInput.functionName,
-                        }, false)];
-                    case 21:
-                        _e.sent();
-                        return [2 /*return*/, { buildSaveUri: buildSaveUri }];
-                }
             });
         });
     };
     Builder.prototype.buildInBuildtkit = function (_a, baseDir, codeUri, funcArtifactDir, funfilePath) {
         var region = _a.region, serviceProps = _a.serviceProps, functionName = _a.functionName, functionProps = _a.functionProps, _b = _a.verbose, verbose = _b === void 0 ? true : _b, credentials = _a.credentials;
         return __awaiter(this, void 0, void 0, function () {
-            var targetBuildStage, dockerfilePath, dockerfileInArtifact, passwdMount, pwdFilePath, pwdFileInArtifact;
+            var targetBuildStage, dockerfilePath, execSyncCmd, execSyncCmd, dockerfileInArtifact, passwdMount, pwdFilePath, pwdFileInArtifact;
             return __generator(this, function (_c) {
                 switch (_c.label) {
                     case 0:
                         if (!funfilePath) return [3 /*break*/, 2];
-                        return [4 /*yield*/, install_file_1.processFunfileForBuildkit(serviceProps, codeUri, funfilePath, baseDir, funcArtifactDir, functionProps.runtime, functionName, this.enableBuildkitServer, this.buildkitServerPort)];
+                        return [4 /*yield*/, install_file_1.processFunfileForBuildkit(serviceProps, codeUri, funfilePath, baseDir, funcArtifactDir, functionProps.runtime, functionName, Builder.enableBuildkitServer, Builder.buildkitServerPort)];
                     case 1:
                         _c.sent();
                         _c.label = 2;
                     case 2:
                         targetBuildStage = 'buildresult';
                         dockerfilePath = path_1.default.join(codeUri, '.buildkit.generated.dockerfile');
-                        return [4 /*yield*/, buildkit_1.generateDockerfileForBuildkit(credentials, region, dockerfilePath, serviceProps, functionProps, baseDir, codeUri, funcArtifactDir, verbose, Builder.stages, targetBuildStage)];
+                        return [4 /*yield*/, buildkit_1.generateDockerfileForBuildkit(credentials, region, dockerfilePath, serviceProps, functionProps, baseDir, codeUri, funcArtifactDir, verbose, Builder.stages, targetBuildStage, this.argsPayload)];
                     case 3:
                         _c.sent();
                         // exec build
-                        if (this.enableBuildkitServer) {
-                            child_process_1.execSync("buildctl --addr tcp://localhost:" + this.buildkitServerPort + " build --no-cache --frontend dockerfile.v0 --local context=" + baseDir + " --local dockerfile=" + path_1.default.dirname(dockerfilePath) + " --opt filename=" + path_1.default.basename(dockerfilePath) + " --opt target=" + targetBuildStage + " --output type=local,dest=" + baseDir, {
-                                stdio: 'inherit',
-                            });
+                        if (Builder.enableBuildkitServer) {
+                            execSyncCmd = "buildctl --addr tcp://" + utils_1.buildkitServerAddr + ":" + Builder.buildkitServerPort + " build --no-cache --frontend dockerfile.v0 --local context=" + baseDir + " --local dockerfile=" + path_1.default.dirname(dockerfilePath) + " --opt filename=" + path_1.default.basename(dockerfilePath) + " --opt target=" + targetBuildStage + " --output type=local,dest=" + baseDir;
+                            logger_1.default.debug("buildInBuildtkit enableBuildkitServer execSyncCmd: " + execSyncCmd);
+                            child_process_1.execSync(execSyncCmd, { stdio: 'inherit' });
                         }
                         else {
-                            child_process_1.execSync("buildctl build --no-cache --frontend dockerfile.v0 --local context=" + baseDir + " --local dockerfile=" + path_1.default.dirname(dockerfilePath) + " --opt filename=" + path_1.default.basename(dockerfilePath) + " --opt target=" + targetBuildStage + " --output type=local,dest=" + baseDir, {
-                                stdio: 'inherit',
-                            });
+                            execSyncCmd = "buildctl build --no-cache --frontend dockerfile.v0 --local context=" + baseDir + " --local dockerfile=" + path_1.default.dirname(dockerfilePath) + " --opt filename=" + path_1.default.basename(dockerfilePath) + " --opt target=" + targetBuildStage + " --output type=local,dest=" + baseDir;
+                            logger_1.default.debug("buildInBuildtkit execSyncCmd: " + execSyncCmd);
+                            child_process_1.execSync(execSyncCmd, { stdio: 'inherit' });
                         }
                         // clean
                         return [4 /*yield*/, fs_extra_1.default.remove(dockerfilePath)];
@@ -120335,12 +120576,13 @@ var Builder = /** @class */ (function () {
                             verbose: verbose,
                             credentials: credentials,
                             stages: Builder.stages,
+                            userCustomConfig: this.argsPayload,
                         })];
                     case 1:
                         opts = _c.sent();
-                        this.logger.debug("[" + this.projectName + "] Generate Build Container Build Opts: " + JSON.stringify(opts));
+                        logger_1.default.debug("Generate Build Container Build Opts: " + JSON.stringify(opts));
                         usedImage = opts.Image;
-                        this.logger.info("Build function using image: " + usedImage);
+                        logger_1.default.info("Build function using image: " + usedImage);
                         return [4 /*yield*/, docker_1.dockerRun(opts)];
                     case 2:
                         exitRs = _c.sent();
@@ -120360,8 +120602,6 @@ var Builder = /** @class */ (function () {
             return __generator(this, function (_d) {
                 switch (_d.label) {
                     case 0:
-                        process.env.BUILD_EXCLIUDE_FILES = utils_1.getExcludeFilesEnv();
-                        process.env.TOOL_CACHE_PATH = '.s';
                         runtime = functionProps.runtime;
                         return [4 /*yield*/, this.fcCore.checkLanguage(runtime)];
                     case 1:
@@ -120369,15 +120609,17 @@ var Builder = /** @class */ (function () {
                         if (!result && details) {
                             throw new this.fcCore.CatchableError(details);
                         }
+                        process.env.BUILD_EXCLIUDE_FILES = utils_1.getExcludeFilesEnv();
+                        process.env.TOOL_CACHE_PATH = '.s';
                         if (this.fcCore.isInterpretedLanguage(runtime, codeUri)) {
                             process.env.ONLY_CPOY_MANIFEST_FILE = 'true';
                         }
                         stages = ['install', 'build'];
                         fcfilePath = path_1.default.resolve(codeUri, 'fcfile');
                         if (fs_extra_1.default.existsSync(fcfilePath)) {
-                            this.logger.log("Found fcfile in src directory, maybe you want to use 's build --use-docker' ?", 'yellow');
+                            logger_1.default.log("Found fcfile in src directory, maybe you want to use 's build --use-docker' ?", 'yellow');
                         }
-                        builder = new fc_builders_1.default.Builder(serviceName, functionName, codeUri, runtime, funcArtifactDir, verbose, stages);
+                        builder = new fc_builders_1.default.Builder(serviceName, functionName, codeUri, runtime, funcArtifactDir, verbose, stages, this.useKaniko ? this.argsPayload : {});
                         return [4 /*yield*/, builder.build()];
                     case 2:
                         _d.sent();
@@ -120386,26 +120628,31 @@ var Builder = /** @class */ (function () {
             });
         });
     };
-    Builder.prototype.codeSkipBuild = function (_a) {
+    Builder.prototype.codeBuild = function (_a) {
         var baseDir = _a.baseDir, codeUri = _a.codeUri, runtime = _a.runtime;
         return __awaiter(this, void 0, void 0, function () {
-            var src, absCodeUri, taskFlows;
-            return __generator(this, function (_b) {
-                switch (_b.label) {
+            var src, _b, scriptFile, command, absCodeUri, taskFlows;
+            return __generator(this, function (_c) {
+                switch (_c.label) {
                     case 0:
                         src = utils_1.checkCodeUri(codeUri);
-                        this.logger.debug("src is: " + src);
+                        logger_1.default.debug("src is: " + src);
                         if (!src) {
                             return [2 /*return*/, false];
+                        }
+                        _b = this.argsPayload || {}, scriptFile = _b.scriptFile, command = _b.command;
+                        if (this.useSandbox || (this.useDocker && (scriptFile || command))) {
+                            logger_1.default.debug('not skip build');
+                            return [2 /*return*/, true];
                         }
                         absCodeUri = path_1.default.resolve(baseDir, src);
                         return [4 /*yield*/, fc_builders_1.default.Builder.detectTaskFlow(runtime, absCodeUri)];
                     case 1:
-                        taskFlows = _b.sent();
-                        this.logger.debug("taskFlows isEmpty: " + lodash_1.default.isEmpty(taskFlows) + ",only default task flow is: " + this.isOnlyDefaultTaskFlow(taskFlows));
-                        this.logger.debug(JSON.stringify(taskFlows));
-                        if (lodash_1.default.isEmpty(taskFlows) || this.isOnlyDefaultTaskFlow(taskFlows)) {
-                            this.logger.info('No need build for this project.');
+                        taskFlows = _c.sent();
+                        logger_1.default.debug("taskFlows isEmpty: " + core_1.lodash.isEmpty(taskFlows) + ",only default task flow is: " + this.isOnlyDefaultTaskFlow(taskFlows));
+                        logger_1.default.debug(JSON.stringify(taskFlows));
+                        if (core_1.lodash.isEmpty(taskFlows) || this.isOnlyDefaultTaskFlow(taskFlows)) {
+                            logger_1.default.info('No need build for this project.');
                             return [2 /*return*/, false];
                         }
                         return [2 /*return*/, true];
@@ -120420,63 +120667,65 @@ var Builder = /** @class */ (function () {
         return taskFlows[0].name === 'DefaultTaskFlow';
     };
     Builder.prototype.initBuildArtifactDir = function (_a) {
+        var _b, _c;
         var baseDir = _a.baseDir, serviceName = _a.serviceName, functionName = _a.functionName;
         return __awaiter(this, void 0, void 0, function () {
             var artifactPath, buildFilesListJSONPath, _ex_1;
-            var _this = this;
-            return __generator(this, function (_b) {
-                switch (_b.label) {
+            return __generator(this, function (_d) {
+                switch (_d.label) {
                     case 0:
+                        if (!(this.useSandbox || ((_b = this.argsPayload) === null || _b === void 0 ? void 0 : _b.command) || ((_c = this.argsPayload) === null || _c === void 0 ? void 0 : _c.scriptFile))) return [3 /*break*/, 2];
+                        return [4 /*yield*/, utils_1.removeBuildCache(this.fcCore, baseDir, serviceName, functionName)];
+                    case 1:
+                        _d.sent();
+                        return [2 /*return*/, baseDir];
+                    case 2:
                         artifactPath = this.fcCore.getBuildArtifactPath(baseDir, serviceName, functionName);
-                        this.logger.debug("[" + this.projectName + "] Build save url: " + artifactPath + ".");
-                        if (!fs_extra_1.default.pathExistsSync(artifactPath)) return [3 /*break*/, 2];
-                        this.logger.debug("[" + this.projectName + "] Folder already exists, delete folder.");
+                        logger_1.default.debug("[" + this.projectName + "] Build save url: " + artifactPath + ".");
+                        if (!fs_extra_1.default.pathExistsSync(artifactPath)) return [3 /*break*/, 4];
+                        logger_1.default.debug("[" + this.projectName + "] Folder already exists, delete folder.");
                         return [4 /*yield*/, new Promise(function (resolve, reject) {
                                 rimraf_1.default(artifactPath, function (err) {
                                     if (err) {
-                                        _this.logger.error("Delete dir error: " + artifactPath);
+                                        logger_1.default.error("Delete dir error: " + artifactPath);
                                         reject(err);
                                     }
                                     resolve('');
                                 });
                             })];
-                    case 1:
-                        _b.sent();
-                        // fs.rmdirSync(artifactPath, { recursive: true });
-                        this.logger.debug("[" + this.projectName + "] Deleted folder successfully.");
-                        _b.label = 2;
-                    case 2:
-                        this.logger.debug("[" + this.projectName + "] Create build folder.");
-                        fs_extra_1.default.mkdirpSync(artifactPath);
-                        this.logger.debug("[" + this.projectName + "] Created build folder successfully.");
-                        _b.label = 3;
                     case 3:
-                        _b.trys.push([3, 5, , 6]);
-                        buildFilesListJSONPath = this.fcCore.genBuildLinkFilesListJSONPath(baseDir, serviceName, functionName);
-                        this.logger.debug("[" + this.projectName + "] Build link save url: " + buildFilesListJSONPath + ".");
-                        return [4 /*yield*/, fs_extra_1.default.remove(buildFilesListJSONPath)];
+                        _d.sent();
+                        // fs.rmdirSync(artifactPath, { recursive: true });
+                        logger_1.default.debug("[" + this.projectName + "] Deleted folder successfully.");
+                        _d.label = 4;
                     case 4:
-                        _b.sent();
-                        return [3 /*break*/, 6];
+                        logger_1.default.debug("[" + this.projectName + "] Create build folder.");
+                        fs_extra_1.default.mkdirpSync(artifactPath);
+                        logger_1.default.debug("[" + this.projectName + "] Created build folder successfully.");
+                        _d.label = 5;
                     case 5:
-                        _ex_1 = _b.sent();
-                        return [3 /*break*/, 6];
-                    case 6: return [2 /*return*/, artifactPath];
+                        _d.trys.push([5, 7, , 8]);
+                        buildFilesListJSONPath = this.fcCore.genBuildLinkFilesListJSONPath(baseDir, serviceName, functionName);
+                        logger_1.default.debug("[" + this.projectName + "] Build link save url: " + buildFilesListJSONPath + ".");
+                        return [4 /*yield*/, fs_extra_1.default.remove(buildFilesListJSONPath)];
+                    case 6:
+                        _d.sent();
+                        return [3 /*break*/, 8];
+                    case 7:
+                        _ex_1 = _d.sent();
+                        return [3 /*break*/, 8];
+                    case 8: return [2 /*return*/, artifactPath];
                 }
             });
         });
     };
-    Builder.defaultbuildkitServerAddr = 'localhost';
     Builder.stages = ['install', 'build'];
-    Builder.defaultbuildkitServerPort = 65360;
-    __decorate([
-        core_1.HLogger(constant_1.CONTEXT),
-        __metadata("design:type", Object)
-    ], Builder.prototype, "logger", void 0);
+    Builder.buildkitServerPort = +process.env.buildkitServerPort || 65360;
+    Builder.enableBuildkitServer = core_1.lodash.isEqual(process.env.enableBuildkitServer, '1');
     return Builder;
 }());
 exports.default = Builder;
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiYnVpbGRlci5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbImZpbGU6Ly8vVXNlcnMvd2I0NDcxODgvRGVza3RvcC9uZXctcmVwby9mYy1idWlsZC9zcmMvdXRpbHMvYnVpbGRlci50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7OztBQUFBLDhDQUF5RDtBQUN6RCx3REFBK0I7QUFDL0Isc0RBQTBCO0FBQzFCLDhDQUF3QjtBQUN4QixrREFBNEI7QUFDNUIsa0RBQXVCO0FBQ3ZCLHNFQUErQztBQUMvQywrQ0FBeUM7QUFDekMsaUNBQTJEO0FBQzNELDJDQUErRDtBQUMvRCxtQ0FBeUQ7QUFDekQsdUNBQWlEO0FBRWpELCtDQUF1RTtBQUN2RSx1Q0FBMkQ7QUFDM0QsaURBQXVEO0FBYXZEO0lBaUJFLGlCQUFZLFdBQW1CLEVBQUUsU0FBa0IsRUFBRSxVQUFrQixFQUFFLFVBQWtCLEVBQUUsV0FBb0IsRUFBRSxNQUFXO1FBQzVILElBQUksQ0FBQyxNQUFNLEdBQUcsTUFBTSxDQUFDO1FBQ3JCLElBQUksQ0FBQyxXQUFXLEdBQUcsV0FBVyxDQUFDO1FBQy9CLElBQUksQ0FBQyxVQUFVLEdBQUcsVUFBVSxDQUFDO1FBQzdCLElBQUksQ0FBQyxhQUFhLEdBQUcsVUFBVSxDQUFDLENBQUMsQ0FBQyxjQUFJLENBQUMsT0FBTyxDQUFDLFVBQVUsQ0FBQyxDQUFDLENBQUMsQ0FBQyxPQUFPLENBQUMsR0FBRyxFQUFFLENBQUM7UUFFM0UsZ0NBQWdDO1FBQ2hDLElBQU0seUJBQXlCLEdBQUcsQ0FBQyxPQUFPLENBQUMsR0FBRyxDQUFDLHlCQUF5QixDQUFDO1FBQ3pFLElBQU0sK0JBQStCLEdBQUcsQ0FBQyxPQUFPLENBQUMsR0FBRyxDQUFDLCtCQUErQixDQUFDO1FBQ3JGLElBQU0sb0JBQW9CLEdBQUcsQ0FBQyxPQUFPLENBQUMsR0FBRyxDQUFDLG9CQUFvQixDQUFDO1FBQy9ELElBQU0sa0JBQWtCLEdBQUcsQ0FBQyxPQUFPLENBQUMsR0FBRyxDQUFDLGtCQUFrQixDQUFDO1FBQ25ELElBQUEsa0JBQWtCLEdBQUssT0FBTyxDQUFDLEdBQUcsbUJBQWhCLENBQWlCO1FBQzNDLElBQUksK0JBQStCLEVBQUU7WUFDbkMsSUFBSSxDQUFDLE1BQU0sQ0FBQyxLQUFLLENBQUMsb0RBQW9ELENBQUMsQ0FBQztZQUN4RSxJQUFJLENBQUMsU0FBUyxHQUFHLEtBQUssQ0FBQztZQUN2QixJQUFJLENBQUMsV0FBVyxHQUFHLElBQUksQ0FBQztTQUN6QjthQUFNLElBQUksU0FBUyxJQUFJLHlCQUF5QixFQUFFO1lBQ2pELElBQUksQ0FBQyxNQUFNLENBQUMsS0FBSyxDQUFDLDZDQUE2QyxDQUFDLENBQUM7WUFDakUsSUFBSSxDQUFDLFNBQVMsR0FBRyxLQUFLLENBQUM7WUFDdkIsSUFBSSxDQUFDLFdBQVcsR0FBRyxJQUFJLENBQUM7U0FDekI7YUFBTSxJQUFJLFdBQVcsRUFBRTtZQUN0QixJQUFJLFNBQVMsRUFBRTtnQkFDYixJQUFJLENBQUMsTUFBTSxDQUFDLElBQUksQ0FBQyw0RUFBNEUsQ0FBQyxDQUFDO2FBQ2hHO1lBQ0QsSUFBSSxDQUFDLFNBQVMsR0FBRyxLQUFLLENBQUM7WUFDdkIsSUFBSSxDQUFDLFdBQVcsR0FBRyxJQUFJLENBQUM7U0FDekI7YUFBTSxJQUFJLFNBQVMsRUFBRTtZQUNwQixJQUFJLENBQUMsU0FBUyxHQUFHLElBQUksQ0FBQztZQUN0QixJQUFJLENBQUMsV0FBVyxHQUFHLEtBQUssQ0FBQztTQUMxQjtRQUVELElBQUksQ0FBQyxvQkFBb0IsR0FBRyxvQkFBb0IsS0FBSyxDQUFDLENBQUM7UUFDdkQsSUFBSSxJQUFJLENBQUMsb0JBQW9CLEVBQUU7WUFDN0IsSUFBSSxDQUFDLElBQUksQ0FBQyxXQUFXLEVBQUU7Z0JBQ3JCLElBQUksQ0FBQyxNQUFNLENBQUMsSUFBSSxDQUFDLGlGQUFpRixDQUFDLENBQUM7Z0JBQ3BHLElBQUksQ0FBQyxvQkFBb0IsR0FBRyxLQUFLLENBQUM7YUFDbkM7aUJBQU07Z0JBQ0wsSUFBSSxDQUFDLGtCQUFrQixHQUFHLGtCQUFrQixJQUFJLE9BQU8sQ0FBQyx5QkFBeUIsQ0FBQztnQkFDbEYsSUFBSSxDQUFDLGtCQUFrQixHQUFHLGtCQUFrQixJQUFJLE9BQU8sQ0FBQyx5QkFBeUIsQ0FBQzthQUNuRjtTQUNGO1FBRUQsSUFBSSxDQUFDLGFBQWEsR0FBRyxPQUFPLENBQUMsR0FBRyxDQUFDLGVBQWUsQ0FBQztRQUNqRCxJQUFJLElBQUksQ0FBQyxhQUFhLEtBQUsscUJBQVUsRUFBRTtZQUNyQyxJQUFJLENBQUMsU0FBUyxHQUFHLEtBQUssQ0FBQztZQUN2QixJQUFJLENBQUMsV0FBVyxHQUFHLEtBQUssQ0FBQztTQUMxQjtJQUNILENBQUM7SUFFTyw0Q0FBMEIsR0FBbEMsVUFBbUMscUJBQTBCO1FBQzNELElBQUksZ0JBQUMsQ0FBQyxPQUFPLENBQUMscUJBQXFCLGFBQXJCLHFCQUFxQix1QkFBckIscUJBQXFCLENBQUUsS0FBSyxDQUFDLEVBQUU7WUFDM0MsSUFBTSxZQUFZLEdBQUcsNkZBQTZGLENBQUM7WUFDbkgsTUFBTSxJQUFJLElBQUksQ0FBQyxNQUFNLENBQUMsY0FBYyxDQUFDLFlBQVksQ0FBQyxDQUFDO1NBQ3BEO1FBRUQsSUFBTSxjQUFjLEdBQUcsY0FBSSxDQUFDLE9BQU8sQ0FBQyxJQUFJLENBQUMsVUFBVSxJQUFJLFlBQVksQ0FBQyxDQUFDO1FBQ3JFLElBQUksQ0FBQyxrQkFBRSxDQUFDLFVBQVUsQ0FBQyxjQUFjLENBQUMsRUFBRTtZQUNsQyxJQUFNLEdBQUcsR0FBRyxnTEFBZ0wsQ0FBQztZQUM3TCxNQUFNLElBQUksSUFBSSxDQUFDLE1BQU0sQ0FBQyxjQUFjLENBQUMsR0FBRyxDQUFDLENBQUM7U0FDM0M7UUFFRCxPQUFPO1lBQ0wsY0FBYyxnQkFBQTtZQUNkLFNBQVMsRUFBRSxxQkFBcUIsQ0FBQyxLQUFLO1NBQ3ZDLENBQUM7SUFDSixDQUFDO0lBRWEsd0NBQXNCLEdBQXBDLFVBQXFDLFVBQXVCOzs7Ozs7d0JBQ2xELHFCQUFxQixHQUFLLFVBQVUsQ0FBQyxhQUFhLHNCQUE3QixDQUE4Qjt3QkFDckQsS0FBZ0MsSUFBSSxDQUFDLDBCQUEwQixDQUFDLHFCQUFxQixDQUFDLEVBQXBGLGNBQWMsb0JBQUEsRUFBRSxTQUFTLGVBQUEsQ0FBNEQ7d0JBQzdGLElBQUksQ0FBQyxNQUFNLENBQUMsS0FBSyxDQUFDLDJCQUF5QixJQUFJLENBQUMsb0JBQW9CLDhCQUF5QixJQUFJLENBQUMsa0JBQWtCLDhCQUF5QixJQUFJLENBQUMsa0JBQW9CLENBQUMsQ0FBQzs2QkFDcEssSUFBSSxDQUFDLG9CQUFvQixFQUF6Qix3QkFBeUI7d0JBQzNCLHFCQUFNLG9DQUFvQixDQUFDLFVBQVUsQ0FBQyxNQUFNLEVBQUUsU0FBUyxFQUFFLFVBQVUsQ0FBQyxXQUFXLENBQUMsRUFBQTs7d0JBQWhGLFNBQWdGLENBQUM7d0JBQ2pGLHdCQUFRLENBQUMsMkJBQXlCLElBQUksQ0FBQyxrQkFBa0IsU0FBSSxJQUFJLENBQUMsa0JBQWtCLDJGQUU1RCxjQUFJLENBQUMsT0FBTyxDQUFDLGNBQWMsQ0FBQyx3Q0FDekIsY0FBSSxDQUFDLE9BQU8sQ0FBQyxjQUFjLENBQUMsOENBQ3RCLFNBQVMsZUFBWSxFQUFFOzRCQUN0RCxLQUFLLEVBQUUsU0FBUzt5QkFDakIsQ0FBQyxDQUFDOzs7d0JBRUgsd0JBQVEsQ0FBQyxnR0FFZSxjQUFJLENBQUMsT0FBTyxDQUFDLGNBQWMsQ0FBQyx3Q0FDekIsY0FBSSxDQUFDLE9BQU8sQ0FBQyxjQUFjLENBQUMsOENBQ3RCLFNBQVcsRUFBRTs0QkFDNUMsS0FBSyxFQUFFLFNBQVM7eUJBQ2pCLENBQUMsQ0FBQzs7NEJBR0wsc0JBQU8sU0FBUyxFQUFDOzs7O0tBQ2xCO0lBRWEsc0NBQW9CLEdBQWxDLFVBQW1DLFVBQXVCOzs7Ozs7d0JBQ2hELHFCQUFxQixHQUFLLFVBQVUsQ0FBQyxhQUFhLHNCQUE3QixDQUE4Qjt3QkFDckQsS0FBZ0MsSUFBSSxDQUFDLDBCQUEwQixDQUFDLHFCQUFxQixDQUFDLEVBQXBGLGNBQWMsb0JBQUEsRUFBRSxTQUFTLGVBQUEsQ0FBNEQ7d0JBQzdGLHFCQUFNLG9DQUFvQixDQUFDLFVBQVUsQ0FBQyxNQUFNLEVBQUUsU0FBUyxFQUFFLFVBQVUsQ0FBQyxXQUFXLENBQUMsRUFBQTs7d0JBQWhGLFNBQWdGLENBQUM7d0JBQ2pGLElBQUksQ0FBQyxNQUFNLENBQUMsSUFBSSxDQUFDLDBCQUEwQixDQUFDLENBQUM7d0JBQzdDLHdCQUFRLENBQUMsMEZBQ2tCLGNBQWMsb0NBQ2hCLGNBQUksQ0FBQyxPQUFPLENBQUMsY0FBYyxDQUFDLHVDQUN6QixTQUFTLE1BQUcsRUFBRTs0QkFDeEMsS0FBSyxFQUFFLFNBQVM7eUJBQ2pCLENBQUMsQ0FBQzt3QkFJRyxLQUFLLEdBQUcsa0JBQUUsQ0FBQyxXQUFXLENBQUMsZ0JBQWdCLENBQUMsQ0FBQzt3QkFDL0MsS0FBSyxDQUFDLE9BQU8sQ0FBQyxVQUFDLElBQUk7NEJBQ2pCLElBQUksSUFBSSxDQUFDLFVBQVUsQ0FBQyxTQUFTLENBQUMsRUFBRTtnQ0FDOUIsSUFBTSxHQUFHLEdBQUcsVUFBVSxDQUFDLElBQUksQ0FBQyxNQUFNLENBQUMsQ0FBQyxDQUFDLENBQUMsQ0FBQztnQ0FDdkMsSUFBSSxHQUFHLEdBQUcsQ0FBQyxFQUFFO29DQUNYLE9BQU8sQ0FBQyxHQUFHLENBQUMsMkJBQXlCLElBQUksbUJBQWdCLENBQUMsQ0FBQztvQ0FDM0Qsd0JBQVEsQ0FBQywyQkFBeUIsSUFBSSxtQkFBZ0IsQ0FBQyxDQUFDO2lDQUN6RDs2QkFDRjtpQ0FBTSxJQUFJLElBQUksQ0FBQyxVQUFVLENBQUMsU0FBUyxDQUFDLEVBQUU7Z0NBQ3JDLE9BQU8sQ0FBQyxHQUFHLENBQUMsMkJBQXlCLElBQUksbUJBQWdCLENBQUMsQ0FBQztnQ0FDM0Qsd0JBQVEsQ0FBQywyQkFBeUIsSUFBSSxtQkFBZ0IsQ0FBQyxDQUFDO2dDQUN4RCx3QkFBUSxDQUFDLDBCQUF3QixJQUFJLENBQUMsTUFBTSxDQUFDLENBQUMsQ0FBRyxDQUFDLENBQUM7Z0NBQ25ELHdCQUFRLENBQUMsd0JBQXdCLENBQUMsQ0FBQzs2QkFDcEM7d0JBQ0gsQ0FBQyxDQUFDLENBQUM7d0JBQ0gsUUFBUTt3QkFDUix3QkFBUSxDQUFDLCtCQUErQixDQUFDLENBQUM7d0JBQzFDLHdCQUFRLENBQUMsdURBQXVELENBQUMsQ0FBQzt3QkFDbEUsd0JBQVEsQ0FBQyw4QkFBOEIsQ0FBQyxDQUFDO3dCQUN6Qyx3QkFBUSxDQUFDLG9EQUFvRCxDQUFDLENBQUM7d0JBRS9ELHNCQUFPLFNBQVMsRUFBQzs7OztLQUNsQjtJQUVLLDRCQUFVLEdBQWhCLFVBQWlCLFVBQXVCOzs7O2dCQUM5QixxQkFBcUIsR0FBSyxVQUFVLENBQUMsYUFBYSxzQkFBN0IsQ0FBOEI7Z0JBQ3JELEtBQWdDLElBQUksQ0FBQywwQkFBMEIsQ0FBQyxxQkFBcUIsQ0FBQyxFQUFwRixjQUFjLG9CQUFBLEVBQUUsU0FBUyxlQUFBLENBQTREO2dCQUU3RixJQUFJLENBQUMsTUFBTSxDQUFDLElBQUksQ0FBQyxtQkFBbUIsQ0FBQyxDQUFDO2dCQUN0Qyx3QkFBUSxDQUFDLHFCQUFtQixTQUFTLFlBQU8sY0FBYyxPQUFJLEVBQUU7b0JBQzlELEtBQUssRUFBRSxTQUFTO29CQUNoQixHQUFHLEVBQUUsY0FBSSxDQUFDLE9BQU8sQ0FBQyxjQUFjLENBQUM7aUJBQ2xDLENBQUMsQ0FBQztnQkFDSCxJQUFJLENBQUMsTUFBTSxDQUFDLEdBQUcsQ0FBQyxpQkFBZSxTQUFTLG1CQUFnQixDQUFDLENBQUM7Z0JBQzFELHNCQUFPLFNBQVMsRUFBQzs7O0tBQ2xCO0lBRUssdUJBQUssR0FBWCxVQUFZLFVBQXVCOzs7Ozs7O3dCQUMzQixLQUE2QixJQUFJLEVBQS9CLFNBQVMsZUFBQSxFQUFFLFdBQVcsaUJBQUEsQ0FBVTt3QkFDaEMsYUFBYSxHQUF3QixVQUFVLGNBQWxDLEVBQUUsaUJBQWlCLEdBQUssVUFBVSxrQkFBZixDQUFnQjt3QkFDaEQsT0FBTyxHQUFjLGFBQWEsUUFBM0IsRUFBRSxPQUFPLEdBQUssYUFBYSxRQUFsQixDQUFtQjt3QkFDckMsT0FBTyxHQUFHLElBQUksQ0FBQyxhQUFhLENBQUM7d0JBQzdCLFdBQVcsR0FBRyxPQUFPLEtBQUssa0JBQWtCLENBQUM7d0JBQ25ELElBQUksV0FBVyxFQUFFOzRCQUNmLElBQUksQ0FBQyxNQUFNLENBQUMsSUFBSSxDQUFDLDRCQUE0QixDQUFDLENBQUM7eUJBQ2hEOzZCQUNHLFdBQVcsRUFBWCx3QkFBVzs2QkFDVCxTQUFTLEVBQVQsd0JBQVM7d0JBQ1gsNEJBQU0sTUFBQSxJQUFJLENBQUMsTUFBTSxFQUFDLFVBQVUsbURBQUcsSUFBSSxtQkFBTSxFQUFFLEVBQUUsaUJBQWlCLElBQUM7O3dCQUEvRCxTQUErRCxDQUFDO3dCQUNoRSxJQUFJLENBQUMsTUFBTSxDQUFDLElBQUksQ0FBQywwQkFBMEIsQ0FBQyxDQUFDOzs7d0JBQ3hDLElBQUksSUFBSSxDQUFDLGFBQWEsS0FBSyxxQkFBVSxFQUFFOzRCQUM1QyxJQUFJLENBQUMsTUFBTSxDQUFDLEtBQUssQ0FBQywwQkFBMEIsQ0FBQyxDQUFDO3lCQUMvQzs7O3dCQUVILElBQUksQ0FBQyxNQUFNLENBQUMsS0FBSyxDQUFDLE1BQUksSUFBSSxDQUFDLFdBQVcscUJBQWdCLE9BQU8sTUFBRyxDQUFDLENBQUM7NkJBRTlELFdBQVcsRUFBWCx5QkFBVzt3QkFDVCxLQUFLLFNBQVEsQ0FBQzs2QkFDZCxDQUFBLElBQUksQ0FBQyxhQUFhLEtBQUsscUJBQVUsQ0FBQSxFQUFqQyx3QkFBaUM7d0JBQzNCLHFCQUFNLElBQUksQ0FBQyxvQkFBb0IsQ0FBQyxVQUFVLENBQUMsRUFBQTs7d0JBQW5ELEtBQUssR0FBRyxTQUEyQyxDQUFDO3dCQUNwRCxzQkFBTyxFQUFFLEtBQUssT0FBQSxFQUFFLEVBQUM7OzZCQUVmLElBQUksQ0FBQyxXQUFXLEVBQWhCLHdCQUFnQjt3QkFDVixxQkFBTSxJQUFJLENBQUMsc0JBQXNCLENBQUMsVUFBVSxDQUFDLEVBQUE7O3dCQUFyRCxLQUFLLEdBQUcsU0FBNkMsQ0FBQzs7NEJBRTlDLHFCQUFNLElBQUksQ0FBQyxVQUFVLENBQUMsVUFBVSxDQUFDLEVBQUE7O3dCQUF6QyxLQUFLLEdBQUcsU0FBaUMsQ0FBQzs7NEJBRTVDLHNCQUFPLEVBQUUsS0FBSyxPQUFBLEVBQUUsRUFBQzs7d0JBR2IsR0FBRyxHQUFHLG9CQUFZLENBQUMsT0FBTyxDQUFDLENBQUM7d0JBQ2QscUJBQU0seUJBQVUsQ0FBQyxFQUFFLE9BQU8sRUFBRSxHQUFHLEVBQUUsT0FBTyxTQUFBLEVBQUUsT0FBTyxTQUFBLEVBQUUsQ0FBQyxFQUFBOzt3QkFBbEUsV0FBVyxHQUFHLFNBQW9EO3dCQUVsRCxLQUFBLFdBQVcsQ0FBQTtnQ0FBWCx5QkFBVzt3QkFBSSxxQkFBTSxJQUFJLENBQUMsYUFBYSxDQUFDLEVBQUUsT0FBTyxTQUFBLEVBQUUsT0FBTyxTQUFBLEVBQUUsT0FBTyxTQUFBLEVBQUUsQ0FBQyxFQUFBOzs4QkFBdkQsU0FBdUQ7Ozt3QkFBdEYsYUFBYSxLQUF5RTt3QkFDNUYsSUFBSSxDQUFDLE1BQU0sQ0FBQyxLQUFLLENBQUMsTUFBSSxJQUFJLENBQUMsV0FBVywyQkFBc0IsYUFBYSxNQUFHLENBQUMsQ0FBQzt3QkFFOUUsSUFBSSxDQUFDLGFBQWEsRUFBRTs0QkFDbEIsc0JBQU8sRUFBRSxFQUFDO3lCQUNYO3dCQUVLLGVBQWUsR0FBRyxjQUFJLENBQUMsVUFBVSxDQUFDLEdBQUcsQ0FBQyxDQUFDLENBQUMsQ0FBQyxHQUFHLENBQUMsQ0FBQyxDQUFDLGNBQUksQ0FBQyxJQUFJLENBQUMsT0FBTyxFQUFFLEdBQUcsQ0FBQyxDQUFDO3dCQUNyRCxxQkFBTSxJQUFJLENBQUMsb0JBQW9CLENBQUMsRUFBRSxPQUFPLFNBQUEsRUFBRSxXQUFXLEVBQUUsVUFBVSxDQUFDLFlBQVksQ0FBQyxJQUFJLEVBQUUsWUFBWSxFQUFFLFVBQVUsQ0FBQyxhQUFhLENBQUMsSUFBSSxFQUFFLENBQUMsRUFBQTs7d0JBQXRKLGVBQWUsR0FBRyxTQUFvSTt3QkFDdEosWUFBWSxHQUFHLGVBQWUsQ0FBQzs2QkFDakMsV0FBVyxFQUFYLHlCQUFXO3dCQUNiLHFCQUFNLElBQUksQ0FBQyxnQkFBZ0IsQ0FBQyxVQUFVLEVBQUUsT0FBTyxFQUFFLGVBQWUsRUFBRSxlQUFlLEVBQUUsV0FBVyxDQUFDLEVBQUE7O3dCQUEvRixTQUErRixDQUFDOzs7NkJBQ3ZGLENBQUEsU0FBUyxJQUFJLFdBQVcsQ0FBQSxFQUF4Qix5QkFBd0I7d0JBQ2pDLHFCQUFNLElBQUksQ0FBQyxhQUFhLENBQUMsVUFBVSxFQUFFLE9BQU8sRUFBRSxlQUFlLEVBQUUsZUFBZSxDQUFDLEVBQUE7O3dCQUEvRSxTQUErRSxDQUFDOzs2QkFFaEYscUJBQU0sSUFBSSxDQUFDLGFBQWEsQ0FBQyxVQUFVLEVBQUUsT0FBTyxFQUFFLGVBQWUsRUFBRSxlQUFlLENBQUMsRUFBQTs7d0JBQS9FLFNBQStFLENBQUM7OzZCQUdsRixxQkFBTSxJQUFJLENBQUMsTUFBTSxDQUFDLFNBQVMsQ0FBQzs0QkFDMUIsYUFBYSxFQUFFLE9BQU87NEJBQ3RCLE9BQU8sRUFBRSxHQUFHOzRCQUNaLE9BQU8sU0FBQTs0QkFDUCxXQUFXLEVBQUUsVUFBVSxDQUFDLFdBQVc7NEJBQ25DLFlBQVksRUFBRSxVQUFVLENBQUMsWUFBWTt5QkFDdEMsRUFBRSxLQUFLLENBQUMsRUFBQTs7d0JBTlQsU0FNUyxDQUFDO3dCQUVWLHNCQUFPLEVBQUUsWUFBWSxjQUFBLEVBQUUsRUFBQzs7OztLQUN6QjtJQUVhLGtDQUFnQixHQUE5QixVQUErQixFQU9qQixFQUFFLE9BQWUsRUFBRSxPQUFlLEVBQUUsZUFBdUIsRUFBRSxXQUFtQjtZQU41RixNQUFNLFlBQUEsRUFDTixZQUFZLGtCQUFBLEVBQ1osWUFBWSxrQkFBQSxFQUNaLGFBQWEsbUJBQUEsRUFDYixlQUFjLEVBQWQsT0FBTyxtQkFBRyxJQUFJLEtBQUEsRUFDZCxXQUFXLGlCQUFBOzs7Ozs7NkJBRVAsV0FBVyxFQUFYLHdCQUFXO3dCQUNiLHFCQUFNLHdDQUF5QixDQUFDLFlBQVksRUFBRSxPQUFPLEVBQUUsV0FBVyxFQUFFLE9BQU8sRUFBRSxlQUFlLEVBQUUsYUFBYSxDQUFDLE9BQU8sRUFBRSxZQUFZLEVBQUUsSUFBSSxDQUFDLG9CQUFvQixFQUFFLElBQUksQ0FBQyxrQkFBa0IsQ0FBQyxFQUFBOzt3QkFBdEwsU0FBc0wsQ0FBQzs7O3dCQUVuTCxnQkFBZ0IsR0FBRyxhQUFhLENBQUM7d0JBQ2pDLGNBQWMsR0FBRyxjQUFJLENBQUMsSUFBSSxDQUFDLE9BQU8sRUFBRSxnQ0FBZ0MsQ0FBQyxDQUFDO3dCQUM1RSxxQkFBTSx3Q0FBNkIsQ0FBQyxXQUFXLEVBQUUsTUFBTSxFQUFFLGNBQWMsRUFBRSxZQUFZLEVBQ25GLGFBQWEsRUFDYixPQUFPLEVBQ1AsT0FBTyxFQUNQLGVBQWUsRUFDZixPQUFPLEVBQ1AsT0FBTyxDQUFDLE1BQU0sRUFDZCxnQkFBZ0IsQ0FBQyxFQUFBOzt3QkFQbkIsU0FPbUIsQ0FBQzt3QkFDcEIsYUFBYTt3QkFDYixJQUFJLElBQUksQ0FBQyxvQkFBb0IsRUFBRTs0QkFDN0Isd0JBQVEsQ0FDTixxQ0FBbUMsSUFBSSxDQUFDLGtCQUFrQixtRUFBOEQsT0FBTyw0QkFBdUIsY0FBSSxDQUFDLE9BQU8sQ0FBQyxjQUFjLENBQUMsd0JBQW1CLGNBQUksQ0FBQyxRQUFRLENBQUMsY0FBYyxDQUFDLHNCQUFpQixnQkFBZ0Isa0NBQTZCLE9BQVMsRUFBRTtnQ0FDelMsS0FBSyxFQUFFLFNBQVM7NkJBQ2pCLENBQ0YsQ0FBQzt5QkFDSDs2QkFBTTs0QkFDTCx3QkFBUSxDQUNOLHdFQUFzRSxPQUFPLDRCQUF1QixjQUFJLENBQUMsT0FBTyxDQUFDLGNBQWMsQ0FBQyx3QkFBbUIsY0FBSSxDQUFDLFFBQVEsQ0FBQyxjQUFjLENBQUMsc0JBQWlCLGdCQUFnQixrQ0FBNkIsT0FBUyxFQUFFO2dDQUN2UCxLQUFLLEVBQUUsU0FBUzs2QkFDakIsQ0FDRixDQUFDO3lCQUNIO3dCQUVELFFBQVE7d0JBQ1IscUJBQU0sa0JBQUUsQ0FBQyxNQUFNLENBQUMsY0FBYyxDQUFDLEVBQUE7O3dCQUQvQixRQUFRO3dCQUNSLFNBQStCLENBQUM7d0JBQzFCLG9CQUFvQixHQUFHLGNBQUksQ0FBQyxJQUFJLENBQUMsZUFBZSxFQUFFLGNBQUksQ0FBQyxRQUFRLENBQUMsY0FBYyxDQUFDLENBQUMsQ0FBQzt3QkFDbkYscUJBQU0sa0JBQUUsQ0FBQyxVQUFVLENBQUMsb0JBQW9CLENBQUMsRUFBQTs7NkJBQXpDLFNBQXlDLEVBQXpDLHdCQUF5Qzt3QkFDM0MscUJBQU0sa0JBQUUsQ0FBQyxNQUFNLENBQUMsb0JBQW9CLENBQUMsRUFBQTs7d0JBQXJDLFNBQXFDLENBQUM7OzRCQUVwQixxQkFBTSwyQkFBa0IsQ0FBQyxPQUFPLENBQUMsRUFBQTs7d0JBQS9DLFdBQVcsR0FBRyxTQUFpQzs2QkFDakQsV0FBVyxFQUFYLHlCQUFXO3dCQUNQLFdBQVcsR0FBRyxXQUFXLENBQUMsTUFBTSxDQUFDO3dCQUN2QyxxQkFBTSxrQkFBRSxDQUFDLE1BQU0sQ0FBQyxXQUFXLENBQUMsRUFBQTs7d0JBQTVCLFNBQTRCLENBQUM7d0JBQ3ZCLGlCQUFpQixHQUFHLGNBQUksQ0FBQyxJQUFJLENBQUMsZUFBZSxFQUFFLGNBQUksQ0FBQyxRQUFRLENBQUMsV0FBVyxDQUFDLENBQUMsQ0FBQzt3QkFDN0UscUJBQU0sa0JBQUUsQ0FBQyxVQUFVLENBQUMsaUJBQWlCLENBQUMsRUFBQTs7NkJBQXRDLFNBQXNDLEVBQXRDLHlCQUFzQzt3QkFDeEMscUJBQU0sa0JBQUUsQ0FBQyxNQUFNLENBQUMsaUJBQWlCLENBQUMsRUFBQTs7d0JBQWxDLFNBQWtDLENBQUM7Ozs7OztLQUd4QztJQUVLLCtCQUFhLEdBQW5CLFVBQW9CLEVBUU4sRUFBRSxPQUFlLEVBQUUsT0FBZSxFQUFFLGVBQXVCO1lBUHZFLE1BQU0sWUFBQSxFQUNOLFdBQVcsaUJBQUEsRUFDWCxZQUFZLGtCQUFBLEVBQ1osWUFBWSxrQkFBQSxFQUNaLGFBQWEsbUJBQUEsRUFDYixlQUFjLEVBQWQsT0FBTyxtQkFBRyxJQUFJLEtBQUEsRUFDZCxXQUFXLGlCQUFBOzs7Ozs0QkFFRSxxQkFBTSw0Q0FBK0IsQ0FBQzs0QkFDakQsTUFBTSxRQUFBOzRCQUNOLFdBQVcsYUFBQTs0QkFDWCxZQUFZLGNBQUE7NEJBQ1osWUFBWSxjQUFBOzRCQUNaLGFBQWEsZUFBQTs0QkFDYixPQUFPLFNBQUE7NEJBQ1AsT0FBTyxTQUFBOzRCQUNQLGVBQWUsaUJBQUE7NEJBQ2YsT0FBTyxTQUFBOzRCQUNQLFdBQVcsYUFBQTs0QkFDWCxNQUFNLEVBQUUsT0FBTyxDQUFDLE1BQU07eUJBQ3ZCLENBQUMsRUFBQTs7d0JBWkksSUFBSSxHQUFHLFNBWVg7d0JBRUYsSUFBSSxDQUFDLE1BQU0sQ0FBQyxLQUFLLENBQ2YsTUFBSSxJQUFJLENBQUMsV0FBVywrQ0FBMEMsSUFBSSxDQUFDLFNBQVMsQ0FBQyxJQUFJLENBQUcsQ0FDckYsQ0FBQzt3QkFFSSxTQUFTLEdBQUcsSUFBSSxDQUFDLEtBQUssQ0FBQzt3QkFFN0IsSUFBSSxDQUFDLE1BQU0sQ0FBQyxJQUFJLENBQUMsaUNBQWdDLFNBQVcsQ0FBQyxDQUFDO3dCQUUvQyxxQkFBTSxrQkFBUyxDQUFDLElBQUksQ0FBQyxFQUFBOzt3QkFBOUIsTUFBTSxHQUFHLFNBQXFCO3dCQUNwQyxJQUFJLE1BQU0sQ0FBQyxVQUFVLEtBQUssQ0FBQyxFQUFFOzRCQUNyQixZQUFZLEdBQUcsb0JBQWtCLFdBQVcsU0FBSSxZQUFZLFlBQVMsQ0FBQzs0QkFDNUUsTUFBTSxJQUFJLElBQUksQ0FBQyxNQUFNLENBQUMsY0FBYyxDQUFDLFlBQVksQ0FBQyxDQUFDO3lCQUNwRDs7Ozs7S0FDRjtJQUVLLCtCQUFhLEdBQW5CLFVBQ0UsRUFBeUUsRUFDekUsUUFBZ0IsRUFBRSxPQUFlLEVBQUUsZUFBdUI7WUFEeEQsV0FBVyxpQkFBQSxFQUFFLFlBQVksa0JBQUEsRUFBRSxhQUFhLG1CQUFBLEVBQUUsZUFBYyxFQUFkLE9BQU8sbUJBQUcsSUFBSSxLQUFBOzs7Ozs7d0JBRzFELE9BQU8sQ0FBQyxHQUFHLENBQUMsb0JBQW9CLEdBQUcsMEJBQWtCLEVBQUUsQ0FBQzt3QkFDeEQsT0FBTyxDQUFDLEdBQUcsQ0FBQyxlQUFlLEdBQUcsSUFBSSxDQUFDO3dCQUUzQixPQUFPLEdBQUssYUFBYSxRQUFsQixDQUFtQjt3QkFDUixxQkFBTSxJQUFJLENBQUMsTUFBTSxDQUFDLGFBQWEsQ0FBQyxPQUFPLENBQUMsRUFBQTs7d0JBQTVELEtBQW9CLFNBQXdDLEVBQTNELE1BQU0sUUFBQSxFQUFFLE9BQU8sUUFBQTt3QkFDdEIsSUFBSSxDQUFDLE1BQU0sSUFBSSxPQUFPLEVBQUU7NEJBQ3RCLE1BQU0sSUFBSSxJQUFJLENBQUMsTUFBTSxDQUFDLGNBQWMsQ0FBQyxPQUFPLENBQUMsQ0FBQzt5QkFDL0M7d0JBRUQsSUFBSSxJQUFJLENBQUMsTUFBTSxDQUFDLHFCQUFxQixDQUFDLE9BQU8sRUFBRSxPQUFPLENBQUMsRUFBRTs0QkFDdkQsT0FBTyxDQUFDLEdBQUcsQ0FBQyx1QkFBdUIsR0FBRyxNQUFNLENBQUM7eUJBQzlDO3dCQUVLLE1BQU0sR0FBRyxDQUFDLFNBQVMsRUFBRSxPQUFPLENBQUMsQ0FBQzt3QkFHOUIsVUFBVSxHQUFHLGNBQUksQ0FBQyxPQUFPLENBQUMsT0FBTyxFQUFFLFFBQVEsQ0FBQyxDQUFDO3dCQUNuRCxJQUFJLGtCQUFFLENBQUMsVUFBVSxDQUFDLFVBQVUsQ0FBQyxFQUFFOzRCQUM3QixJQUFJLENBQUMsTUFBTSxDQUFDLEdBQUcsQ0FDYiwrRUFBK0UsRUFDL0UsUUFBUSxDQUNULENBQUM7eUJBQ0g7d0JBRUssT0FBTyxHQUFHLElBQUkscUJBQVUsQ0FBQyxPQUFPLENBQ3BDLFdBQVcsRUFDWCxZQUFZLEVBQ1osT0FBTyxFQUNQLE9BQU8sRUFDUCxlQUFlLEVBQ2YsT0FBTyxFQUNQLE1BQU0sQ0FDUCxDQUFDO3dCQUNGLHFCQUFNLE9BQU8sQ0FBQyxLQUFLLEVBQUUsRUFBQTs7d0JBQXJCLFNBQXFCLENBQUM7Ozs7O0tBQ3ZCO0lBRUssK0JBQWEsR0FBbkIsVUFBb0IsRUFBeUM7WUFBdkMsT0FBTyxhQUFBLEVBQUUsT0FBTyxhQUFBLEVBQUUsT0FBTyxhQUFBOzs7Ozs7d0JBQ3ZDLEdBQUcsR0FBRyxvQkFBWSxDQUFDLE9BQU8sQ0FBQyxDQUFDO3dCQUNsQyxJQUFJLENBQUMsTUFBTSxDQUFDLEtBQUssQ0FBQyxhQUFXLEdBQUssQ0FBQyxDQUFDO3dCQUNwQyxJQUFJLENBQUMsR0FBRyxFQUFFOzRCQUNSLHNCQUFPLEtBQUssRUFBQzt5QkFDZDt3QkFFSyxVQUFVLEdBQUcsY0FBSSxDQUFDLE9BQU8sQ0FBQyxPQUFPLEVBQUUsR0FBRyxDQUFDLENBQUM7d0JBQzVCLHFCQUFNLHFCQUFVLENBQUMsT0FBTyxDQUFDLGNBQWMsQ0FBQyxPQUFPLEVBQUUsVUFBVSxDQUFDLEVBQUE7O3dCQUF4RSxTQUFTLEdBQUcsU0FBNEQ7d0JBQzlFLElBQUksQ0FBQyxNQUFNLENBQUMsS0FBSyxDQUNmLHdCQUFzQixnQkFBQyxDQUFDLE9BQU8sQ0FDN0IsU0FBUyxDQUNWLG9DQUErQixJQUFJLENBQUMscUJBQXFCLENBQUMsU0FBUyxDQUFHLENBQ3hFLENBQUM7d0JBQ0YsSUFBSSxDQUFDLE1BQU0sQ0FBQyxLQUFLLENBQUMsSUFBSSxDQUFDLFNBQVMsQ0FBQyxTQUFTLENBQUMsQ0FBQyxDQUFDO3dCQUM3QyxJQUFJLGdCQUFDLENBQUMsT0FBTyxDQUFDLFNBQVMsQ0FBQyxJQUFJLElBQUksQ0FBQyxxQkFBcUIsQ0FBQyxTQUFTLENBQUMsRUFBRTs0QkFDakUsSUFBSSxDQUFDLE1BQU0sQ0FBQyxJQUFJLENBQUMsaUNBQWlDLENBQUMsQ0FBQzs0QkFDcEQsc0JBQU8sS0FBSyxFQUFDO3lCQUNkO3dCQUVELHNCQUFPLElBQUksRUFBQzs7OztLQUNiO0lBRUQsdUNBQXFCLEdBQXJCLFVBQXNCLFNBQVM7UUFDN0IsSUFBSSxTQUFTLENBQUMsTUFBTSxLQUFLLENBQUMsRUFBRTtZQUMxQixPQUFPLEtBQUssQ0FBQztTQUNkO1FBRUQsT0FBTyxTQUFTLENBQUMsQ0FBQyxDQUFDLENBQUMsSUFBSSxLQUFLLGlCQUFpQixDQUFDO0lBQ2pELENBQUM7SUFFSyxzQ0FBb0IsR0FBMUIsVUFBMkIsRUFBaUQ7WUFBL0MsT0FBTyxhQUFBLEVBQUUsV0FBVyxpQkFBQSxFQUFFLFlBQVksa0JBQUE7Ozs7Ozs7d0JBQ3ZELFlBQVksR0FBRyxJQUFJLENBQUMsTUFBTSxDQUFDLG9CQUFvQixDQUFDLE9BQU8sRUFBRSxXQUFXLEVBQUUsWUFBWSxDQUFDLENBQUM7d0JBQzFGLElBQUksQ0FBQyxNQUFNLENBQUMsS0FBSyxDQUFDLE1BQUksSUFBSSxDQUFDLFdBQVcsMEJBQXFCLFlBQVksTUFBRyxDQUFDLENBQUM7NkJBRXhFLGtCQUFFLENBQUMsY0FBYyxDQUFDLFlBQVksQ0FBQyxFQUEvQix3QkFBK0I7d0JBQ2pDLElBQUksQ0FBQyxNQUFNLENBQUMsS0FBSyxDQUFDLE1BQUksSUFBSSxDQUFDLFdBQVcsNENBQXlDLENBQUMsQ0FBQzt3QkFDakYscUJBQU0sSUFBSSxPQUFPLENBQUMsVUFBQyxPQUFPLEVBQUUsTUFBTTtnQ0FDaEMsZ0JBQU0sQ0FBQyxZQUFZLEVBQUUsVUFBQyxHQUFHO29DQUN2QixJQUFJLEdBQUcsRUFBRTt3Q0FDUCxLQUFJLENBQUMsTUFBTSxDQUFDLEtBQUssQ0FBQyx1QkFBcUIsWUFBYyxDQUFDLENBQUM7d0NBQ3ZELE1BQU0sQ0FBQyxHQUFHLENBQUMsQ0FBQztxQ0FDYjtvQ0FDRCxPQUFPLENBQUMsRUFBRSxDQUFDLENBQUM7Z0NBQ2QsQ0FBQyxDQUFDLENBQUM7NEJBQ0wsQ0FBQyxDQUFDLEVBQUE7O3dCQVJGLFNBUUUsQ0FBQzt3QkFDSCxtREFBbUQ7d0JBQ25ELElBQUksQ0FBQyxNQUFNLENBQUMsS0FBSyxDQUFDLE1BQUksSUFBSSxDQUFDLFdBQVcsbUNBQWdDLENBQUMsQ0FBQzs7O3dCQUUxRSxJQUFJLENBQUMsTUFBTSxDQUFDLEtBQUssQ0FBQyxNQUFJLElBQUksQ0FBQyxXQUFXLDJCQUF3QixDQUFDLENBQUM7d0JBQ2hFLGtCQUFFLENBQUMsVUFBVSxDQUFDLFlBQVksQ0FBQyxDQUFDO3dCQUM1QixJQUFJLENBQUMsTUFBTSxDQUFDLEtBQUssQ0FBQyxNQUFJLElBQUksQ0FBQyxXQUFXLHlDQUFzQyxDQUFDLENBQUM7Ozs7d0JBSXRFLHNCQUFzQixHQUFHLElBQUksQ0FBQyxNQUFNLENBQUMsNkJBQTZCLENBQUMsT0FBTyxFQUFFLFdBQVcsRUFBRSxZQUFZLENBQUMsQ0FBQzt3QkFDN0csSUFBSSxDQUFDLE1BQU0sQ0FBQyxLQUFLLENBQUMsTUFBSSxJQUFJLENBQUMsV0FBVywrQkFBMEIsc0JBQXNCLE1BQUcsQ0FBQyxDQUFDO3dCQUMzRixxQkFBTSxrQkFBRSxDQUFDLE1BQU0sQ0FBQyxzQkFBc0IsQ0FBQyxFQUFBOzt3QkFBdkMsU0FBdUMsQ0FBQzs7Ozs7NEJBRzFDLHNCQUFPLFlBQVksRUFBQzs7OztLQUNyQjtJQXRaTSxpQ0FBeUIsR0FBRyxXQUFXLENBQUM7SUFDeEMsY0FBTSxHQUFhLENBQUMsU0FBUyxFQUFFLE9BQU8sQ0FBQyxDQUFDO0lBQ3hDLGlDQUF5QixHQUFHLEtBQUssQ0FBQztJQWJ2QjtRQUFqQixjQUFPLENBQUMsa0JBQU8sQ0FBQzs7MkNBQWlCO0lBa2FwQyxjQUFDO0NBQUEsQUFuYUQsSUFtYUM7a0JBbmFvQixPQUFPIn0=
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiYnVpbGRlci5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbImZpbGU6Ly8vVXNlcnMvd2I0NDcxODgvRGVza3RvcC9uZXctcmVwby9mYy1idWlsZC9zcmMvdXRpbHMvYnVpbGRlci50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7O0FBQUEsd0RBQStCO0FBQy9CLHNEQUEwQjtBQUMxQiw4Q0FBd0I7QUFDeEIsa0RBQTRCO0FBQzVCLDhDQUFvRDtBQUNwRCxzRUFBK0M7QUFDL0MsK0NBQXlDO0FBQ3pDLGlDQUFpRztBQUNqRywyQ0FBaUY7QUFDakYsbUNBQTZFO0FBRTdFLCtDQUF1RTtBQUN2RSx1Q0FBMkQ7QUFDM0QsaURBQXVEO0FBQ3ZELDREQUFzQztBQTJCdEM7SUFlRSxpQkFDRSxXQUFtQixFQUNuQixhQUFxQixFQUNyQixNQUFXLEVBQ1gsUUFBbUIsRUFDbkIsV0FBOEI7UUFBOUIsNEJBQUEsRUFBQSxnQkFBOEI7UUFFOUIsSUFBSSxDQUFDLE1BQU0sR0FBRyxNQUFNLENBQUM7UUFDckIsSUFBSSxDQUFDLFdBQVcsR0FBRyxXQUFXLENBQUM7UUFDL0IsSUFBSSxDQUFDLGFBQWEsR0FBRyxhQUFhLENBQUM7UUFDbkMsSUFBSSxDQUFDLFdBQVcsR0FBRyxXQUFXLENBQUM7UUFDdkIsSUFBQSxVQUFVLEdBQWMsV0FBVyxXQUF6QixFQUFFLE9BQU8sR0FBSyxXQUFXLFFBQWhCLENBQWlCO1FBQ3BDLElBQUEsU0FBUyxHQUF5QyxRQUFRLFVBQWpELEVBQUUsV0FBVyxHQUE0QixRQUFRLFlBQXBDLEVBQUUsVUFBVSxHQUFnQixRQUFRLFdBQXhCLEVBQUUsU0FBUyxHQUFLLFFBQVEsVUFBYixDQUFjO1FBQ25FLElBQUksU0FBUyxFQUFFO1lBQ2IsZ0JBQU0sQ0FBQyxHQUFHLENBQUMseUJBQXlCLENBQUMsQ0FBQztZQUN0QyxJQUFJLENBQUMsU0FBUyxHQUFHLFNB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
 
 /***/ }),
 
@@ -120550,7 +120799,7 @@ var fs = __importStar(__webpack_require__(5630));
 var dockerfile_ast_1 = __webpack_require__(80989);
 var path_1 = __importDefault(__webpack_require__(85622));
 var docker_1 = __webpack_require__(55041);
-var _ = __importStar(__webpack_require__(90250));
+var core_1 = __webpack_require__(67782);
 var passwd_1 = __importDefault(__webpack_require__(49849));
 var get_image_name_1 = __webpack_require__(25231);
 function formatDockerfileForBuildkit(dockerfilePath, fromSrcToDstPairs, baseDir, targetBuildStage) {
@@ -120634,20 +120883,21 @@ function resolvePasswdMount(contentDir) {
         });
     });
 }
-function generateDockerfileForBuildkit(credentials, region, dockerfilePath, serviceConfig, functionConfig, baseDir, codeUri, funcArtifactDir, verbose, stages, targetBuildStage) {
+function generateDockerfileForBuildkit(credentials, region, dockerfilePath, serviceConfig, functionConfig, baseDir, codeUri, funcArtifactDir, verbose, stages, targetBuildStage, userCustomConfig) {
     return __awaiter(this, void 0, void 0, function () {
-        var runtime, envs, codeMount, funcArtifactMountDir, artifactDirMount, passwdMount, mountsInDocker, _a, fromSrcToDstPairsInBuild, fromSrcToDstPairsInOutput, params, cmd, contentDir, dockerfileContent;
-        return __generator(this, function (_b) {
-            switch (_b.label) {
+        var runtime, _a, customEnv, additionalArgs, command, scriptFile, envs, codeMount, funcArtifactMountDir, artifactDirMount, passwdMount, mountsInDocker, _b, fromSrcToDstPairsInBuild, fromSrcToDstPairsInOutput, params, cmd, contentDir, dockerfileContent;
+        return __generator(this, function (_c) {
+            switch (_c.label) {
                 case 0:
                     logger_1.default.log('Generating dockerfile in buildkit format.');
                     runtime = functionConfig.runtime;
-                    return [4 /*yield*/, docker_1.generateDockerfileEnvs(credentials, region, baseDir, serviceConfig, functionConfig)];
+                    _a = userCustomConfig || {}, customEnv = _a.customEnv, additionalArgs = _a.additionalArgs, command = _a.command, scriptFile = _a.scriptFile;
+                    return [4 /*yield*/, docker_1.generateDockerfileEnvs(credentials, region, baseDir, serviceConfig, functionConfig, customEnv)];
                 case 1:
-                    envs = _b.sent();
+                    envs = _c.sent();
                     return [4 /*yield*/, docker_1.resolveCodeUriToMount(path_1.default.resolve(baseDir, codeUri), false)];
                 case 2:
-                    codeMount = _b.sent();
+                    codeMount = _c.sent();
                     funcArtifactMountDir = '/artifactsMount';
                     artifactDirMount = {
                         Type: 'bind',
@@ -120657,9 +120907,9 @@ function generateDockerfileForBuildkit(credentials, region, dockerfilePath, serv
                     };
                     return [4 /*yield*/, resolvePasswdMount(baseDir)];
                 case 3:
-                    passwdMount = _b.sent();
-                    mountsInDocker = _.compact([codeMount, artifactDirMount, passwdMount]);
-                    _a = generateSrcDstPairsFromMounts(mountsInDocker), fromSrcToDstPairsInBuild = _a.fromSrcToDstPairsInBuild, fromSrcToDstPairsInOutput = _a.fromSrcToDstPairsInOutput;
+                    passwdMount = _c.sent();
+                    mountsInDocker = core_1.lodash.compact([codeMount, artifactDirMount, passwdMount]);
+                    _b = generateSrcDstPairsFromMounts(mountsInDocker), fromSrcToDstPairsInBuild = _b.fromSrcToDstPairsInBuild, fromSrcToDstPairsInOutput = _b.fromSrcToDstPairsInOutput;
                     params = {
                         method: 'build',
                         serviceName: serviceConfig.name,
@@ -120669,15 +120919,16 @@ function generateDockerfileForBuildkit(credentials, region, dockerfilePath, serv
                         artifactDir: codeUri === funcArtifactDir ? '/code' : funcArtifactMountDir,
                         stages: stages,
                         verbose: verbose,
+                        otherPayload: { additionalArgs: additionalArgs, command: command, scriptFile: scriptFile },
                     };
                     cmd = "fun-install build --json-params '" + JSON.stringify(params) + "'";
                     contentDir = baseDir;
                     return [4 /*yield*/, dockerfileForBuildkit(runtime, fromSrcToDstPairsInOutput, fromSrcToDstPairsInBuild, contentDir, targetBuildStage, envs, cmd)];
                 case 4:
-                    dockerfileContent = _b.sent();
+                    dockerfileContent = _c.sent();
                     return [4 /*yield*/, fs.writeFile(dockerfilePath, dockerfileContent)];
                 case 5:
-                    _b.sent();
+                    _c.sent();
                     return [2 /*return*/];
             }
         });
@@ -120712,21 +120963,29 @@ function dockerfileForBuildkit(runtime, fromSrcToDstPairsInOutput, fromSrcToDstP
                         envs.forEach(function (e) { return content.push("ENV " + e); });
                     }
                     if (fromSrcToDstPairsInBuild) {
-                        fromSrcToDstPairsInBuild.forEach(function (pair) { return content.push("COPY " + ((contentDir === pair.src || path_1.default.resolve(contentDir) === pair.src) ? './' : path_1.default.relative(contentDir, pair.src)) + " " + pair.dst); });
+                        fromSrcToDstPairsInBuild.forEach(function (pair) {
+                            return content.push("COPY " + (contentDir === pair.src || path_1.default.resolve(contentDir) === pair.src
+                                ? './'
+                                : path_1.default.relative(contentDir, pair.src)) + " " + pair.dst);
+                        });
                     }
                     if (cmd) {
                         content.push("RUN " + cmd);
                     }
                     if (fromSrcToDstPairsInOutput) {
                         content.push("FROM scratch as " + targetBuildStage);
-                        fromSrcToDstPairsInOutput.forEach(function (pair) { return content.push("COPY --from=" + runtime + " " + pair.src + " " + ((contentDir === pair.dst || path_1.default.resolve(contentDir) === pair.dst) ? './' : path_1.default.relative(contentDir, pair.dst))); });
+                        fromSrcToDstPairsInOutput.forEach(function (pair) {
+                            return content.push("COPY --from=" + runtime + " " + pair.src + " " + (contentDir === pair.dst || path_1.default.resolve(contentDir) === pair.dst
+                                ? './'
+                                : path_1.default.relative(contentDir, pair.dst)));
+                        });
                     }
                     return [2 /*return*/, content.join('\n')];
             }
         });
     });
 }
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiYnVpbGRraXQuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyJmaWxlOi8vL1VzZXJzL3diNDQ3MTg4L0Rlc2t0b3AvbmV3LXJlcG8vZmMtYnVpbGQvc3JjL3V0aWxzL2J1aWxka2l0LnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7QUFBQSw0REFBc0M7QUFDdEMsMkNBQStCO0FBQy9CLGlEQUFrRDtBQUNsRCw4Q0FBd0I7QUFDeEIsbUNBQXlFO0FBRXpFLHdDQUE0QjtBQUM1QixvREFBdUM7QUFDdkMsbURBQStEO0FBRS9ELFNBQXNCLDJCQUEyQixDQUFDLGNBQXNCLEVBQUUsaUJBQW9ELEVBQUUsT0FBZSxFQUFFLGdCQUF3Qjs7Ozs7O29CQUN2SyxJQUFJLENBQUMsaUJBQWlCLEVBQUU7d0JBQ3RCLGdCQUFNLENBQUMsS0FBSyxDQUFDLGdDQUFnQyxDQUFDLENBQUM7d0JBQy9DLHNCQUFPO3FCQUNSO29CQUN5QixxQkFBTSxpQ0FBaUMsQ0FBQyxjQUFjLEVBQUUsaUJBQWlCLEVBQUUsT0FBTyxFQUFFLGdCQUFnQixDQUFDLEVBQUE7O29CQUF6SCxpQkFBaUIsR0FBRyxTQUFxRztvQkFFL0gscUJBQU0sRUFBRSxDQUFDLFNBQVMsQ0FBQyxjQUFjLEVBQUUsaUJBQWlCLENBQUMsRUFBQTs7b0JBQXJELFNBQXFELENBQUM7Ozs7O0NBQ3ZEO0FBUkQsa0VBUUM7QUFFRCxTQUFlLGlDQUFpQyxDQUFDLGNBQXNCLEVBQUUsaUJBQW9ELEVBQUUsT0FBZSxFQUFFLGdCQUF3Qjs7Ozs7d0JBQzlJLHFCQUFNLEVBQUUsQ0FBQyxRQUFRLENBQUMsY0FBYyxFQUFFLE1BQU0sQ0FBQyxFQUFBOztvQkFBM0QsZUFBZSxHQUFHLFNBQXlDO29CQUNqRSxJQUFJLENBQUMsZ0JBQWdCLElBQUksQ0FBQyxpQkFBaUIsRUFBRTt3QkFDM0MsZ0JBQU0sQ0FBQyxLQUFL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
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiYnVpbGRraXQuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyJmaWxlOi8vL1VzZXJzL3diNDQ3MTg4L0Rlc2t0b3AvbmV3LXJlcG8vZmMtYnVpbGQvc3JjL3V0aWxzL2J1aWxka2l0LnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7QUFBQSw0REFBc0M7QUFDdEMsMkNBQStCO0FBQy9CLGlEQUFrRDtBQUNsRCw4Q0FBd0I7QUFDeEIsbUNBQXlFO0FBRXpFLDhDQUFvRDtBQUNwRCxvREFBdUM7QUFDdkMsbURBQStEO0FBRS9ELFNBQXNCLDJCQUEyQixDQUMvQyxjQUFzQixFQUN0QixpQkFBc0QsRUFDdEQsT0FBZSxFQUNmLGdCQUF3Qjs7Ozs7O29CQUV4QixJQUFJLENBQUMsaUJBQWlCLEVBQUU7d0JBQ3RCLGdCQUFNLENBQUMsS0FBSyxDQUFDLGdDQUFnQyxDQUFDLENBQUM7d0JBQy9DLHNCQUFPO3FCQUNSO29CQUN5QixxQkFBTSxpQ0FBaUMsQ0FDL0QsY0FBYyxFQUNkLGlCQUFpQixFQUNqQixPQUFPLEVBQ1AsZ0JBQWdCLENBQ2pCLEVBQUE7O29CQUxLLGlCQUFpQixHQUFHLFNBS3pCO29CQUVELHFCQUFNLEVBQUUsQ0FBQyxTQUFTLENBQUMsY0FBYyxFQUFFLGlCQUFpQixDQUFDLEVBQUE7O29CQUFyRCxTQUFxRCxDQUFDOzs7OztDQUN2RDtBQWxCRCxrRUFrQkM7QUFFRCxTQUFlLGlDQUFpQyxDQUM5QyxjQUFzQixFQUN0QixpQkFBc0QsRUFDdEQsT0FBZSxFQUNmLGdCQUF3Qjs7Ozs7d0JBRUEscUJBQU0sRUFBRSxDQUFDLFFBQVEsQ0FBQyxjQUFjLEVBQUUsTUFBTSxDQUFDLEVBQUE7O29CQUEzRCxlQUFlLEdBQUcsU0FBeUM7b0JBQ2pFLElBQUksQ0FBQyxnQkFBZ0IsSUFBSSxDQUFDLGlCQUFpQixFQUFFO3dCQUMzQyxnQkFBTSxD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
 
 /***/ }),
 
@@ -120736,8 +120995,7 @@ function dockerfileForBuildkit(runtime, fromSrcToDstPairsInOutput, fromSrcToDstP
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.FC_BACKEND = exports.HELP = exports.CONTEXT = void 0;
-exports.CONTEXT = 'FC-BUILD';
+exports.FC_BACKEND = exports.HELP = void 0;
 exports.HELP = [
     {
         header: 'Build',
@@ -120792,7 +121050,7 @@ exports.HELP = [
     },
 ];
 exports.FC_BACKEND = 'fc-backend';
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY29uc3RhbnQuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyJmaWxlOi8vL1VzZXJzL3diNDQ3MTg4L0Rlc2t0b3AvbmV3LXJlcG8vZmMtYnVpbGQvc3JjL3V0aWxzL2NvbnN0YW50LnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7OztBQUFhLFFBQUEsT0FBTyxHQUFHLFVBQVUsQ0FBQztBQUVyQixRQUFBLElBQUksR0FBRztJQUNsQjtRQUNFLE1BQU0sRUFBRSxPQUFPO1FBQ2YsT0FBTyxFQUFFLHlCQUF5QjtLQUNuQztJQUNEO1FBQ0UsTUFBTSxFQUFFLE9BQU87UUFDZixPQUFPLEVBQUU7WUFDUCxFQUFFLE9BQU8sRUFBRSw0QkFBNEIsRUFBRTtTQUMxQztLQUNGO0lBQ0Q7UUFDRSxNQUFNLEVBQUUsU0FBUztRQUNqQixVQUFVLEVBQUU7WUFDVjtnQkFDRSxJQUFJLEVBQUUsWUFBWTtnQkFDbEIsV0FBVyxFQUFFLDZCQUE2QjtnQkFDMUMsS0FBSyxFQUFFLEdBQUc7Z0JBQ1YsYUFBYSxFQUFFLEtBQUs7Z0JBQ3BCLElBQUksRUFBRSxNQUFNO2FBQ2I7WUFDRDtnQkFDRSxJQUFJLEVBQUUsWUFBWTtnQkFDbEIsV0FBVyxFQUFFLHlDQUF5QztnQkFDdEQsS0FBSyxFQUFFLEdBQUc7Z0JBQ1YsYUFBYSxFQUFFLEtBQUs7Z0JBQ3BCLElBQUksRUFBRSxNQUFNO2FBQ2I7U0FDRjtLQUNGO0lBQ0Q7UUFDRSxNQUFNLEVBQUUsZ0JBQWdCO1FBQ3hCLFVBQVUsRUFBRTtZQUNWO2dCQUNFLElBQUksRUFBRSxNQUFNO2dCQUNaLFdBQVcsRUFBRSx3QkFBd0I7Z0JBQ3JDLEtBQUssRUFBRSxHQUFHO2dCQUNWLElBQUksRUFBRSxPQUFPO2FBQ2Q7U0FDRjtLQUNGO0lBQ0Q7UUFDRSxNQUFNLEVBQUUsb0JBQW9CO1FBQzVCLE9BQU8sRUFBRTtZQUNQO2dCQUNFLE9BQU8sRUFBRSxnQ0FBZ0M7YUFDMUM7WUFDRDtnQkFDRSxPQUFPLEVBQUUsbUJBQW1CO2FBQzdCO1NBQ0Y7S0FDRjtDQUNGLENBQUM7QUFHVyxRQUFBLFVBQVUsR0FBRyxZQUFZLENBQUMifQ==
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY29uc3RhbnQuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyJmaWxlOi8vL1VzZXJzL3diNDQ3MTg4L0Rlc2t0b3AvbmV3LXJlcG8vZmMtYnVpbGQvc3JjL3V0aWxzL2NvbnN0YW50LnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7OztBQUFhLFFBQUEsSUFBSSxHQUFHO0lBQ2xCO1FBQ0UsTUFBTSxFQUFFLE9BQU87UUFDZixPQUFPLEVBQUUseUJBQXlCO0tBQ25DO0lBQ0Q7UUFDRSxNQUFNLEVBQUUsT0FBTztRQUNmLE9BQU8sRUFBRTtZQUNQLEVBQUUsT0FBTyxFQUFFLDRCQUE0QixFQUFFO1NBQzFDO0tBQ0Y7SUFDRDtRQUNFLE1BQU0sRUFBRSxTQUFTO1FBQ2pCLFVBQVUsRUFBRTtZQUNWO2dCQUNFLElBQUksRUFBRSxZQUFZO2dCQUNsQixXQUFXLEVBQUUsNkJBQTZCO2dCQUMxQyxLQUFLLEVBQUUsR0FBRztnQkFDVixhQUFhLEVBQUUsS0FBSztnQkFDcEIsSUFBSSxFQUFFLE1BQU07YUFDYjtZQUNEO2dCQUNFLElBQUksRUFBRSxZQUFZO2dCQUNsQixXQUFXLEVBQUUseUNBQXlDO2dCQUN0RCxLQUFLLEVBQUUsR0FBRztnQkFDVixhQUFhLEVBQUUsS0FBSztnQkFDcEIsSUFBSSxFQUFFLE1BQU07YUFDYjtTQUNGO0tBQ0Y7SUFDRDtRQUNFLE1BQU0sRUFBRSxnQkFBZ0I7UUFDeEIsVUFBVSxFQUFFO1lBQ1Y7Z0JBQ0UsSUFBSSxFQUFFLE1BQU07Z0JBQ1osV0FBVyxFQUFFLHdCQUF3QjtnQkFDckMsS0FBSyxFQUFFLEdBQUc7Z0JBQ1YsSUFBSSxFQUFFLE9BQU87YUFDZDtTQUNGO0tBQ0Y7SUFDRDtRQUNFLE1BQU0sRUFBRSxvQkFBb0I7UUFDNUIsT0FBTyxFQUFFO1lBQ1A7Z0JBQ0UsT0FBTyxFQUFFLGdDQUFnQzthQUMxQztZQUNEO2dCQUNFLE9BQU8sRUFBRSxtQkFBbUI7YUFDN0I7U0FDRjtLQUNGO0NBQ0YsQ0FBQztBQUdXLFFBQUEsVUFBVSxHQUFHLFlBQVksQ0FBQyJ9
 
 /***/ }),
 
@@ -120841,7 +121099,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-var lodash_1 = __importDefault(__webpack_require__(90250));
+var core_1 = __webpack_require__(67782);
 var fs_extra_1 = __importDefault(__webpack_require__(5630));
 var path_1 = __importDefault(__webpack_require__(85622));
 var os_1 = __importDefault(__webpack_require__(12087));
@@ -120876,7 +121134,7 @@ function findPathsOutofSharedPaths(mounts) {
                     pathsOutofSharedPaths = [];
                     for (_i = 0, mounts_1 = mounts; _i < mounts_1.length; _i++) {
                         mount = mounts_1[_i];
-                        if (lodash_1.default.isEmpty(mount)) {
+                        if (core_1.lodash.isEmpty(mount)) {
                             continue;
                         }
                         mountPath = mount.Source;
@@ -120898,7 +121156,7 @@ function findPathsOutofSharedPaths(mounts) {
     });
 }
 exports.default = findPathsOutofSharedPaths;
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZG9ja2VyLXN1cHBvcnQuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyJmaWxlOi8vL1VzZXJzL3diNDQ3MTg4L0Rlc2t0b3AvbmV3LXJlcG8vZmMtYnVpbGQvc3JjL3V0aWxzL2RvY2tlci1zdXBwb3J0LnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7O0FBQUEsa0RBQXVCO0FBQ3ZCLHNEQUEwQjtBQUMxQiw4Q0FBd0I7QUFDeEIsMENBQW9CO0FBRXBCLElBQU0sdUJBQXVCLEdBQUcsQ0FBQyxRQUFRLEVBQUUsVUFBVSxFQUFFLFVBQVUsRUFBRSxNQUFNLENBQUMsQ0FBQztBQUUzRSxTQUFlLDRCQUE0Qjs7Ozs7O29CQUNuQyxZQUFZLEdBQUcsY0FBSSxDQUFDLElBQUksQ0FDNUIsWUFBRSxDQUFDLE9BQU8sRUFBRSxFQUNaLHlEQUF5RCxDQUMxRCxDQUFDO29CQUVlLHFCQUFNLGtCQUFFLENBQUMsUUFBUSxDQUFDLFlBQVksRUFBRSxNQUFNLENBQUMsRUFBQTs7b0JBQWxELFFBQVEsR0FBRyxTQUF1QztvQkFFbEQsUUFBUSxHQUFHLElBQUksQ0FBQyxLQUFLLENBQUMsUUFBUSxDQUFDLENBQUM7b0JBRXRDLElBQUksTUFBTSxDQUFDLFNBQVMsQ0FBQyxjQUFjLENBQUMsSUFBSSxDQUFDLFFBQVEsRUFBRSx3QkFBd0IsQ0FBQyxFQUFFO3dCQUM1RSxzQkFBTyxRQUFRLENBQUMsc0JBQXNCLEVBQUM7cUJBQ3hDO29CQUNELHNCQUFPLHVCQUF1QixFQUFDOzs7O0NBQ2hDO0FBRUQsU0FBOEIseUJBQXlCLENBQUMsTUFBYTs7Ozs7d0JBQ3pDLHFCQUFNLDRCQUE0QixFQUFFLEVBQUE7O29CQUF4RCxpQkFBaUIsR0FBRyxTQUFvQztvQkFDeEQscUJBQXFCLEdBQUcsRUFBRSxDQUFDO29CQUNqQyxXQUEwQixFQUFOLGlCQUFNLEVBQU4sb0JBQU0sRUFBTixJQUFNLEVBQUU7d0JBQWpCLEtBQUs7d0JBQ2QsSUFBSSxnQkFBQyxDQUFDLE9BQU8sQ0FBQyxLQUFLLENBQUMsRUFBRTs0QkFDcEIsU0FBUzt5QkFDVjt3QkFFSyxTQUFTLEdBQUcsS0FBSyxDQUFDLE1BQU0sQ0FBQzt3QkFDM0IseUJBQXlCLEdBQUcsS0FBSyxDQUFDO3dCQUN0QyxXQUFnRCxFQUFqQix1Q0FBaUIsRUFBakIsK0JBQWlCLEVBQWpCLElBQWlCLEVBQUU7NEJBQXZDLGdCQUFnQjs0QkFDekIsSUFBSSxTQUFTLENBQUMsVUFBVSxDQUFDLGdCQUFnQixDQUFDLEVBQUU7Z0NBQzFDLHlCQUF5QixHQUFHLElBQUksQ0FBQztnQ0FDakMsTUFBTTs2QkFDUDt5QkFDRjt3QkFDRCxJQUFJLENBQUMseUJBQXlCLEVBQUU7NEJBQzlCLHFCQUFxQixDQUFDLElBQUksQ0FBQyxTQUFTLENBQUMsQ0FBQzt5QkFDdkM7cUJBQ0Y7b0JBQ0Qsc0JBQU8scUJBQXFCLEVBQUM7Ozs7Q0FDOUI7QUFyQkQsNENBcUJDIn0=
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZG9ja2VyLXN1cHBvcnQuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyJmaWxlOi8vL1VzZXJzL3diNDQ3MTg4L0Rlc2t0b3AvbmV3LXJlcG8vZmMtYnVpbGQvc3JjL3V0aWxzL2RvY2tlci1zdXBwb3J0LnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7O0FBQUEsOENBQW9EO0FBQ3BELHNEQUEwQjtBQUMxQiw4Q0FBd0I7QUFDeEIsMENBQW9CO0FBRXBCLElBQU0sdUJBQXVCLEdBQUcsQ0FBQyxRQUFRLEVBQUUsVUFBVSxFQUFFLFVBQVUsRUFBRSxNQUFNLENBQUMsQ0FBQztBQUUzRSxTQUFlLDRCQUE0Qjs7Ozs7O29CQUNuQyxZQUFZLEdBQUcsY0FBSSxDQUFDLElBQUksQ0FDNUIsWUFBRSxDQUFDLE9BQU8sRUFBRSxFQUNaLHlEQUF5RCxDQUMxRCxDQUFDO29CQUVlLHFCQUFNLGtCQUFFLENBQUMsUUFBUSxDQUFDLFlBQVksRUFBRSxNQUFNLENBQUMsRUFBQTs7b0JBQWxELFFBQVEsR0FBRyxTQUF1QztvQkFFbEQsUUFBUSxHQUFHLElBQUksQ0FBQyxLQUFLLENBQUMsUUFBUSxDQUFDLENBQUM7b0JBRXRDLElBQUksTUFBTSxDQUFDLFNBQVMsQ0FBQyxjQUFjLENBQUMsSUFBSSxDQUFDLFFBQVEsRUFBRSx3QkFBd0IsQ0FBQyxFQUFFO3dCQUM1RSxzQkFBTyxRQUFRLENBQUMsc0JBQXNCLEVBQUM7cUJBQ3hDO29CQUNELHNCQUFPLHVCQUF1QixFQUFDOzs7O0NBQ2hDO0FBRUQsU0FBOEIseUJBQXlCLENBQUMsTUFBYTs7Ozs7d0JBQ3pDLHFCQUFNLDRCQUE0QixFQUFFLEVBQUE7O29CQUF4RCxpQkFBaUIsR0FBRyxTQUFvQztvQkFDeEQscUJBQXFCLEdBQUcsRUFBRSxDQUFDO29CQUNqQyxXQUEwQixFQUFOLGlCQUFNLEVBQU4sb0JBQU0sRUFBTixJQUFNLEVBQUU7d0JBQWpCLEtBQUs7d0JBQ2QsSUFBSSxhQUFDLENBQUMsT0FBTyxDQUFDLEtBQUssQ0FBQyxFQUFFOzRCQUNwQixTQUFTO3lCQUNWO3dCQUVLLFNBQVMsR0FBRyxLQUFLLENBQUMsTUFBTSxDQUFDO3dCQUMzQix5QkFBeUIsR0FBRyxLQUFLLENBQUM7d0JBQ3RDLFdBQWdELEVBQWpCLHVDQUFpQixFQUFqQiwrQkFBaUIsRUFBakIsSUFBaUIsRUFBRTs0QkFBdkMsZ0JBQWdCOzRCQUN6QixJQUFJLFNBQVMsQ0FBQyxVQUFVLENBQUMsZ0JBQWdCLENBQUMsRUFBRTtnQ0FDMUMseUJBQXlCLEdBQUcsSUFBSSxDQUFDO2dDQUNqQyxNQUFNOzZCQUNQO3lCQUNGO3dCQUNELElBQUksQ0FBQyx5QkFBeUIsRUFBRTs0QkFDOUIscUJBQXFCLENBQUMsSUFBSSxDQUFDLFNBQVMsQ0FBQyxDQUFDO3lCQUN2QztxQkFDRjtvQkFDRCxzQkFBTyxxQkFBcUIsRUFBQzs7OztDQUM5QjtBQXJCRCw0Q0FxQkMifQ==
 
 /***/ }),
 
@@ -120947,19 +121205,18 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.copyFromImage = exports.generateDockerfileEnvs = exports.buildImage = exports.dockerRun = exports.resolvePasswdMount = exports.resolveCodeUriToMount = exports.generateDockerEnvs = exports.generateRamdomContainerName = void 0;
+exports.startSboxContainer = exports.displaySboxTips = exports.copyFromImage = exports.generateDockerfileEnvs = exports.buildImage = exports.dockerRun = exports.resolvePasswdMount = exports.resolveCodeUriToMount = exports.generateDockerEnvs = exports.generateRamdomContainerName = void 0;
 var core_1 = __webpack_require__(67782);
-var lodash_1 = __importDefault(__webpack_require__(90250));
 var fs_extra_1 = __importDefault(__webpack_require__(5630));
 var tar_fs_1 = __importDefault(__webpack_require__(366));
 var path_1 = __importDefault(__webpack_require__(85622));
 var dockerode_1 = __importDefault(__webpack_require__(14571));
 var draftlog_1 = __importDefault(__webpack_require__(30395));
+var logger_1 = __importDefault(__webpack_require__(88989));
 var passwd_1 = __importDefault(__webpack_require__(49849));
 var docker_support_1 = __importDefault(__webpack_require__(44118));
 var utils_1 = __webpack_require__(80239);
 var env_1 = __webpack_require__(53251);
-var constant_1 = __webpack_require__(89381);
 draftlog_1.default.into(console);
 var docker = new dockerode_1.default();
 var containers = new Set();
@@ -120978,7 +121235,7 @@ function createContainer(opts) {
             switch (_a.label) {
                 case 0:
                     isMac = process.platform === 'darwin';
-                    core_1.Logger.debug(constant_1.CONTEXT, "Operating platform: " + process.platform);
+                    logger_1.default.debug("Operating platform: " + process.platform);
                     if (!(opts && isMac)) return [3 /*break*/, 2];
                     if (!opts.HostConfig) return [3 /*break*/, 2];
                     return [4 /*yield*/, docker_support_1.default(opts.HostConfig.Mounts)];
@@ -121024,12 +121281,12 @@ function isDockerToolBoxAndEnsureDockerVersion() {
                 case 0: return [4 /*yield*/, docker.info()];
                 case 1:
                     dockerInfo = _a.sent();
-                    core_1.Logger.debug(constant_1.CONTEXT, "Docker info: " + JSON.stringify(dockerInfo));
+                    logger_1.default.debug("Docker info: " + JSON.stringify(dockerInfo));
                     return [4 /*yield*/, detectDockerVersion(dockerInfo.ServerVersion || '')];
                 case 2:
                     _a.sent();
                     obj = (dockerInfo.Labels || [])
-                        .map(function (e) { return lodash_1.default.split(e, '=', 2); })
+                        .map(function (e) { return core_1.lodash.split(e, '=', 2); })
                         .filter(function (e) { return e.length === 2; })
                         .reduce(function (acc, cur) {
                         acc[cur[0]] = cur[1];
@@ -121070,7 +121327,7 @@ function followProgress(stream, onFinished) {
             barLines[id](id + ": " + status);
         }
         else {
-            if (lodash_1.default.has(event, 'aux.ID')) {
+            if (core_1.lodash.has(event, 'aux.ID')) {
                 event.stream = event.aux.ID + "\n";
             }
             // If there is no id, the line should be wrapped manually.
@@ -121084,7 +121341,7 @@ function generateRamdomContainerName() {
     return "s_local_" + new Date().getTime() + "_" + Math.random().toString(36).substr(2, 7);
 }
 exports.generateRamdomContainerName = generateRamdomContainerName;
-function generateDockerEnvs(_a) {
+function generateDockerEnvs(_a, userCustomEnv) {
     var region = _a.region, baseDir = _a.baseDir, credentials = _a.credentials, serviceName = _a.serviceName, serviceProps = _a.serviceProps, functionName = _a.functionName, functionProps = _a.functionProps;
     return __awaiter(this, void 0, void 0, function () {
         var envs, runtime, codeUri, codeSrc, confEnv, fcCore, ONLY_CPOY_MANIFEST_FILE;
@@ -121103,9 +121360,14 @@ function generateDockerEnvs(_a) {
                     return [4 /*yield*/, core_1.loadComponent('devsapp/fc-core')];
                 case 2:
                     fcCore = _b.sent();
-                    ONLY_CPOY_MANIFEST_FILE = fcCore.isInterpretedLanguage(runtime, path_1.default.join(baseDir, codeSrc)) ? 'true' : '';
+                    ONLY_CPOY_MANIFEST_FILE = fcCore.isInterpretedLanguage(runtime, path_1.default.join(baseDir, codeSrc))
+                        ? 'true'
+                        : '';
                     Object.assign(envs, confEnv);
                     Object.assign(envs, generateFunctionEnvs(functionProps));
+                    if (userCustomEnv) {
+                        Object.assign(envs, userCustomEnv);
+                    }
                     Object.assign(envs, {
                         ONLY_CPOY_MANIFEST_FILE: ONLY_CPOY_MANIFEST_FILE,
                         local: true,
@@ -121234,7 +121496,7 @@ function dockerRun(opts) {
                 case 8:
                     exitRs = _a.sent();
                     vm === null || vm === void 0 ? void 0 : vm.stop();
-                    core_1.Logger.debug(constant_1.CONTEXT, "Container wait: " + JSON.stringify(exitRs) + " ");
+                    logger_1.default.debug("Container wait: " + JSON.stringify(exitRs) + " ");
                     containers.delete(container.id);
                     return [2 /*return*/, exitRs];
             }
@@ -121286,7 +121548,7 @@ function zipTo(archive, to) {
         });
     });
 }
-function generateDockerfileEnvs(credentials, region, baseDir, serviceProps, functionProps) {
+function generateDockerfileEnvs(credentials, region, baseDir, serviceProps, functionProps, customEnv) {
     return __awaiter(this, void 0, void 0, function () {
         var serviceName, functionName, DockerEnvs, DockerfilEnvs;
         return __generator(this, function (_a) {
@@ -121302,7 +121564,7 @@ function generateDockerfileEnvs(credentials, region, baseDir, serviceProps, func
                             serviceProps: serviceProps,
                             functionName: functionName,
                             functionProps: functionProps,
-                        })];
+                        }, customEnv)];
                 case 1:
                     DockerEnvs = _a.sent();
                     DockerfilEnvs = [];
@@ -121342,21 +121604,227 @@ function copyFromImage(imageName, from, to) {
     });
 }
 exports.copyFromImage = copyFromImage;
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZG9ja2VyLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiZmlsZTovLy9Vc2Vycy93YjQ0NzE4OC9EZXNrdG9wL25ldy1yZXBvL2ZjLWJ1aWxkL3NyYy91dGlscy9kb2NrZXIudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7O0FBQUEsOENBQXVFO0FBQ3ZFLGtEQUF1QjtBQUN2QixzREFBMEI7QUFDMUIsa0RBQXlCO0FBQ3pCLDhDQUF3QjtBQUN4Qix3REFBK0I7QUFDL0Isc0RBQWdDO0FBQ2hDLG9EQUF1QztBQUN2QyxvRUFBeUQ7QUFDekQsaUNBQStGO0FBQy9GLDZCQUErQjtBQUMvQix1Q0FBcUM7QUFHckMsa0JBQVEsQ0FBQyxJQUFJLENBQUMsT0FBTyxDQUFDLENBQUM7QUFFdkIsSUFBTSxNQUFNLEdBQUcsSUFBSSxtQkFBTSxFQUFFLENBQUM7QUFDNUIsSUFBTSxVQUFVLEdBQUcsSUFBSSxHQUFHLEVBQUUsQ0FBQztBQUM3QixJQUFNLEtBQUssR0FBRyxPQUFPLENBQUMsUUFBUSxLQUFLLE9BQU8sQ0FBQztBQVkzQyxTQUFTLG9CQUFvQixDQUFDLGFBQTZCO0lBQ2pELElBQUEsb0JBQW9CLEdBQUssYUFBYSxxQkFBbEIsQ0FBbUI7SUFFL0MsSUFBSSxDQUFDLG9CQUFvQixFQUFFO1FBQ3pCLE9BQU8sRUFBRSxDQUFDO0tBQ1g7SUFFRCxPQUFPLE1BQU0sQ0FBQyxNQUFNLENBQUMsRUFBRSxFQUFFLG9CQUFvQixDQUFDLENBQUM7QUFDakQsQ0FBQztBQUVELFNBQWUsZUFBZSxDQUFDLElBQUk7Ozs7OztvQkFDM0IsS0FBSyxHQUFHLE9BQU8sQ0FBQyxRQUFRLEtBQUssUUFBUSxDQUFDO29CQUU1QyxhQUFNLENBQUMsS0FBSyxDQUFDLGtCQUFPLEVBQUUseUJBQXVCLE9BQU8sQ0FBQyxRQUFVLENBQUMsQ0FBQzt5QkFFN0QsQ0FBQSxJQUFJLElBQUksS0FBSyxDQUFBLEVB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
+// exit container, when use ctrl + c
+function waitingForContainerStopped() {
+    var _this = this;
+    // see https://stackoverflow.com/questions/10021373/what-is-the-windows-equivalent-of-process-onsigint-in-node-js
+    // @ts-ignore
+    var isRaw = process.isRaw;
+    var kpCallBack = function (_char, key) {
+        if (key & key.ctrl && key.name === 'c') {
+            // @ts-ignore
+            process.emit('SIGINT');
+        }
+    };
+    if (process.platform === 'win32') {
+        if (process.stdin.isTTY) {
+            process.stdin.setRawMode(isRaw);
+        }
+        process.stdin.on('keypress', kpCallBack);
+    }
+    var stopping = false;
+    process.on('SIGINT', function () { return __awaiter(_this, void 0, void 0, function () {
+        var jobs, c, _i, c_1, container, con, error_1;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    logger_1.default.debug("containers size: " + (containers === null || containers === void 0 ? void 0 : containers.size));
+                    if (stopping) {
+                        return [2 /*return*/];
+                    }
+                    // Just fix test on windows
+                    // Because process.emit('SIGINT') in test/docker.test.js will not trigger rl.on('SIGINT')
+                    // And when listening to stdin the process never finishes until you send a SIGINT signal explicitly.
+                    process.stdin.destroy();
+                    if (!containers.size) {
+                        return [2 /*return*/];
+                    }
+                    stopping = true;
+                    logger_1.default.info('\nReceived canncel request, stopping running containers.....');
+                    jobs = [];
+                    c = Array.from(containers);
+                    for (_i = 0, c_1 = c; _i < c_1.length; _i++) {
+                        container = c_1[_i];
+                        try {
+                            if (container.destroy) {
+                                // container stream
+                                container.destroy();
+                            }
+                            else {
+                                con = docker.getContainer(container);
+                                logger_1.default.info("Stopping container " + container);
+                                jobs.push(con.kill().catch(function (ex) { return logger_1.default.debug("kill container instance error, error is " + ex); }));
+                            }
+                        }
+                        catch (error) {
+                            logger_1.default.debug("get container instance error, ignore container to stop, error is " + error);
+                        }
+                    }
+                    _a.label = 1;
+                case 1:
+                    _a.trys.push([1, 3, , 4]);
+                    return [4 /*yield*/, Promise.all(jobs)];
+                case 2:
+                    _a.sent();
+                    logger_1.default.info('All containers stopped');
+                    // 修复Ctrl C 后容器退出，但是程序会 block 住的问题
+                    process.exit(0);
+                    return [3 /*break*/, 4];
+                case 3:
+                    error_1 = _a.sent();
+                    logger_1.default.error(error_1);
+                    process.exit(-1); // eslint-disable-line
+                    return [3 /*break*/, 4];
+                case 4: return [2 /*return*/];
+            }
+        });
+    }); });
+    return function () {
+        var _a;
+        process.stdin.removeListener('keypress', kpCallBack);
+        if (process.stdin.isTTY) {
+            (_a = process.stdin) === null || _a === void 0 ? void 0 : _a.setRawMode(isRaw);
+        }
+    };
+}
+function displaySboxTips(codeUri, useSandbox) {
+    logger_1.default.log('\nWelcom to s sbox environment.', 'yellow');
+    logger_1.default.log("1. The local mount directory is " + codeUri + ", The container instance mount directory is /code\n2. It is recommended to install the dependency into the /code directory of the instance to ensure that relevant products can be obtained after the build operation\n3. Some NPM packages will cache some information for the system version. It is recommended to add the parameter [--no-shrinkwrap] when using [npm install]" + (useSandbox ? '\n4. Enter [exit] to exit' : '') + "\n", 'yellow');
+}
+exports.displaySboxTips = displaySboxTips;
+function startSboxContainer(opts) {
+    return __awaiter(this, void 0, void 0, function () {
+        var fcCore, isInteractive, isTty, container, stream, logStream, previousKey_1, CTRL_P_1, CTRL_Q_1, resize, isRaw, goThrough;
+        var _this = this;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0: return [4 /*yield*/, core_1.loadComponent('devsapp/fc-core')];
+                case 1:
+                    fcCore = _a.sent();
+                    return [4 /*yield*/, fcCore.pullImageIfNeed(docker, opts.Image)];
+                case 2:
+                    _a.sent();
+                    isInteractive = opts.OpenStdin, isTty = opts.Tty;
+                    return [4 /*yield*/, createContainer(opts)];
+                case 3:
+                    container = _a.sent();
+                    containers.add(container.id);
+                    return [4 /*yield*/, container.start()];
+                case 4:
+                    _a.sent();
+                    return [4 /*yield*/, container.attach({
+                            logs: true,
+                            stream: true,
+                            stdin: isInteractive,
+                            stdout: true,
+                            stderr: true,
+                        })];
+                case 5:
+                    stream = _a.sent();
+                    if (!isTty) return [3 /*break*/, 6];
+                    stream.pipe(process.stdout);
+                    return [3 /*break*/, 9];
+                case 6:
+                    if (!(isInteractive || process.platform === 'win32')) return [3 /*break*/, 8];
+                    return [4 /*yield*/, container.logs({
+                            stdout: true,
+                            stderr: true,
+                            follow: true,
+                        })];
+                case 7:
+                    // 这种情况很诡异，收不到 stream 的 stdout，使用 log 绕过去。
+                    logStream = _a.sent();
+                    container.modem.demuxStream(logStream, process.stdout, process.stderr);
+                    return [3 /*break*/, 9];
+                case 8:
+                    container.modem.demuxStream(stream, process.stdout, process.stderr);
+                    _a.label = 9;
+                case 9:
+                    if (isInteractive) {
+                        // Connect stdin
+                        process.stdin.pipe(stream);
+                        CTRL_P_1 = '\u0010';
+                        CTRL_Q_1 = '\u0011';
+                        process.stdin.on('data', function (key) {
+                            // Detects it is detaching a running container
+                            var keyStr = key.toString('ascii');
+                            if (previousKey_1 === CTRL_P_1 && keyStr === CTRL_Q_1) {
+                                container.stop(function () { });
+                            }
+                            previousKey_1 = keyStr;
+                        });
+                    }
+                    isRaw = process.isRaw;
+                    goThrough = waitingForContainerStopped();
+                    if (!isTty) return [3 /*break*/, 11];
+                    goThrough();
+                    process.stdin.setRawMode(true);
+                    resize = function () { return __awaiter(_this, void 0, void 0, function () {
+                        var dimensions;
+                        return __generator(this, function (_a) {
+                            switch (_a.label) {
+                                case 0:
+                                    dimensions = {
+                                        h: process.stdout.rows,
+                                        w: process.stdout.columns,
+                                    };
+                                    if (!(dimensions.h !== 0 && dimensions.w !== 0)) return [3 /*break*/, 2];
+                                    return [4 /*yield*/, container.resize(dimensions)];
+                                case 1:
+                                    _a.sent();
+                                    _a.label = 2;
+                                case 2: return [2 /*return*/];
+                            }
+                        });
+                    }); };
+                    return [4 /*yield*/, resize()];
+                case 10:
+                    _a.sent();
+                    process.stdout.on('resize', resize);
+                    // 在不加任何 cmd 的情况下 shell prompt 需要输出一些字符才会显示，
+                    // 这里输入一个空格+退格，绕过这个怪异的问题。
+                    stream.write(' \b');
+                    _a.label = 11;
+                case 11: return [4 /*yield*/, container.wait()];
+                case 12:
+                    _a.sent();
+                    // cleanup
+                    if (isTty) {
+                        process.stdout.removeListener('resize', resize);
+                        process.stdin.setRawMode(isRaw);
+                    }
+                    if (isInteractive) {
+                        process.stdin.removeAllListeners();
+                        process.stdin.unpipe(stream);
+                        process.stdin.destroy();
+                    }
+                    if (logStream) {
+                        logStream.removeAllListeners();
+                    }
+                    stream.unpipe(process.stdout);
+                    stream.destroy();
+                    containers.delete(container.id);
+                    if (!isTty) {
+                        goThrough();
+                    }
+                    return [2 /*return*/];
+            }
+        });
+    });
+}
+exports.startSboxContainer = startSboxContainer;
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZG9ja2VyLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiZmlsZTovLy9Vc2Vycy93YjQ0NzE4OC9EZXNrdG9wL25ldy1yZXBvL2ZjLWJ1aWxkL3NyYy91dGlscy9kb2NrZXIudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7O0FBQUEsOENBQTRFO0FBQzVFLHNEQUEwQjtBQUMxQixrREFBeUI7QUFDekIsOENBQXdCO0FBQ3hCLHdEQUErQjtBQUMvQixzREFBZ0M7QUFDaEMsNERBQXNDO0FBQ3RDLG9EQUF1QztBQUN2QyxvRUFBeUQ7QUFDekQsaUNBQStGO0FBQy9GLDZCQUErQjtBQUcvQixrQkFBUSxDQUFDLElBQUksQ0FBQyxPQUFPLENBQUMsQ0FBQztBQUV2QixJQUFNLE1BQU0sR0FBRyxJQUFJLG1CQUFNLEVBQUUsQ0FBQztBQUM1QixJQUFNLFVBQVUsR0FBRyxJQUFJLEdBQUcsRUFBRSxDQUFDO0FBQzdCLElBQU0sS0FBSyxHQUFHLE9BQU8sQ0FBQyxRQUFRLEtBQUssT0FBTyxDQUFDO0FBWTNDLFNBQVMsb0JBQW9CLENBQUMsYUFBNkI7SUFDakQsSUFBQSxvQkFBb0IsR0FBSyxhQUFhLHFCQUFsQixDQUFtQjtJQUUvQyxJQUFJLENBQUMsb0JBQW9CLEVBQUU7UUFDekIsT0FBTyxFQUFFLENBQUM7S0FDWDtJQUVELE9BQU8sTUFBTSxDQUFDLE1BQU0sQ0FBQyxFQUFFLEVBQUUsb0JBQW9CLENBQUMsQ0FBQztBQUNqRCxDQUFDO0FBRUQsU0FBZSxlQUFlLENBQUMsSUFBSTs7Ozs7O29CQUMzQixLQUFLLEdBQUcsT0FBTyxDQUFDLFFBQVEsS0FBSyxRQUFRLENBQUM7b0JBRTVDLGdCQUFNLENBQUMsS0FBSyxDQUFDLHlCQUF1QixPQUFPLENBQUMsUUFBVSxDQUFDLENBQUM7eUJBQ3BELENBQUEsSUFBSSxJQUFJLEtBQUssQ0FBQSxFQUFiLHdCQUFhO3lCQUNYLElBQUksQ0FB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
 
 /***/ }),
 
 /***/ 53251:
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.addEnv = void 0;
-var lodash_1 = __importDefault(__webpack_require__(90250));
+var core_1 = __webpack_require__(67782);
 var sysLibs = [
     '/usr/local/lib',
     '/usr/lib',
@@ -121374,17 +121842,17 @@ var fcLibs = ['/code', '/code/lib', '/usr/local/lib'];
 var modulePaths = ['/python/bin', '/node_modules/.bin'];
 function duplicateRemoval(str) {
     var spliceValue = str.split(':');
-    return lodash_1.default.union(spliceValue).join(':');
+    return core_1.lodash.union(spliceValue).join(':');
 }
 function generateLibPath(envs, prefix) {
-    var libPath = lodash_1.default.union(sysLibs.map(function (p) { return prefix + "/root" + p; }), fcLibs).join(':');
+    var libPath = core_1.lodash.union(sysLibs.map(function (p) { return prefix + "/root" + p; }), fcLibs).join(':');
     if (envs.LD_LIBRARY_PATH) {
         libPath = envs.LD_LIBRARY_PATH + ":" + libPath;
     }
     return duplicateRemoval(libPath);
 }
 function generatePath(envs, prefix) {
-    var path = lodash_1.default.union(sysPaths.map(function (p) { return prefix + "/root" + p; }), fcPaths, modulePaths.map(function (p) { return "" + prefix + p; }), sysPaths).join(':');
+    var path = core_1.lodash.union(sysPaths.map(function (p) { return prefix + "/root" + p; }), fcPaths, modulePaths.map(function (p) { return "" + prefix + p; }), sysPaths).join(':');
     if (envs.PATH) {
         path = envs.PATH + ":" + path;
     }
@@ -121415,7 +121883,7 @@ function addEnv(envVars) {
     return envs;
 }
 exports.addEnv = addEnv;
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW52LmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiZmlsZTovLy9Vc2Vycy93YjQ0NzE4OC9EZXNrdG9wL25ldy1yZXBvL2ZjLWJ1aWxkL3NyYy91dGlscy9lbnYudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6Ijs7Ozs7O0FBQUEsa0RBQXVCO0FBR3ZCLElBQU0sT0FBTyxHQUFHO0lBQ2QsZ0JBQWdCO0lBQ2hCLFVBQVU7SUFDViwyQkFBMkI7SUFDM0IsWUFBWTtJQUNaLE1BQU07SUFDTix1QkFBdUI7SUFDdkIscUNBQXFDO0lBQ3JDLHFDQUFxQztJQUNyQyxxQ0FBcUM7Q0FDdEMsQ0FBQztBQUNGLElBQU0sUUFBUSxHQUFHLENBQUMsZ0JBQWdCLEVBQUUsaUJBQWlCLEVBQUUsVUFBVSxFQUFFLFdBQVcsRUFBRSxPQUFPLEVBQUUsTUFBTSxDQUFDLENBQUM7QUFDakcsSUFBTSxPQUFPLEdBQUcsQ0FBQyxPQUFPLEVBQUUseUJBQXlCLENBQUMsQ0FBQztBQUNyRCxJQUFNLE1BQU0sR0FBRyxDQUFDLE9BQU8sRUFBRSxXQUFXLEVBQUUsZ0JBQWdCLENBQUMsQ0FBQztBQUN4RCxJQUFNLFdBQVcsR0FBRyxDQUFDLGFBQWEsRUFBRSxvQkFBb0IsQ0FBQyxDQUFDO0FBRTFELFNBQVMsZ0JBQWdCLENBQUMsR0FBVztJQUNuQyxJQUFNLFdBQVcsR0FBRyxHQUFHLENBQUMsS0FBSyxDQUFDLEdBQUcsQ0FBQyxDQUFDO0lBQ25DLE9BQU8sZ0JBQUMsQ0FBQyxLQUFLLENBQUMsV0FBVyxDQUFDLENBQUMsSUFBSSxDQUFDLEdBQUcsQ0FBQyxDQUFDO0FBQ3hDLENBQUM7QUFFRCxTQUFTLGVBQWUsQ0FBQyxJQUFhLEVBQUUsTUFBYztJQUNwRCxJQUFJLE9BQU8sR0FBRyxnQkFBQyxDQUFDLEtBQUssQ0FDbkIsT0FBTyxDQUFDLEdBQUcsQ0FBQyxVQUFDLENBQUMsSUFBSyxPQUFHLE1BQU0sYUFBUSxDQUFHLEVBQXBCLENBQW9CLENBQUMsRUFDeEMsTUFBTSxDQUNQLENBQUMsSUFBSSxDQUFDLEdBQUcsQ0FBQyxDQUFDO0lBRVosSUFBSSxJQUFJLENBQUMsZUFBZSxFQUFFO1FBQ3hCLE9BQU8sR0FBTSxJQUFJLENBQUMsZUFBZSxTQUFJLE9BQVMsQ0FBQztLQUNoRDtJQUNELE9BQU8sZ0JBQWdCLENBQUMsT0FBTyxDQUFDLENBQUM7QUFDbkMsQ0FBQztBQUVELFNBQVMsWUFBWSxDQUFDLElBQWEsRUFBRSxNQUFjO0lBQ2pELElBQUksSUFBSSxHQUFHLGdCQUFDLENBQUMsS0FBSyxDQUNoQixRQUFRLENBQUMsR0FBRyxDQUFDLFVBQUMsQ0FBQyxJQUFLLE9BQUcsTUFBTSxhQUFRLENBQUcsRUFBcEIsQ0FBb0IsQ0FBQyxFQUN6QyxPQUFPLEVBQ1AsV0FBVyxDQUFDLEdBQUcsQ0FBQyxVQUFDLENBQUMsSUFBSyxPQUFBLEtBQUcsTUFBTSxHQUFHLENBQUcsRUFBZixDQUFlLENBQUMsRUFDdkMsUUFBUSxDQUNULENBQUMsSUFBSSxDQUFDLEdBQUcsQ0FBQyxDQUFDO0lBRVosSUFBSSxJQUFJLENBQUMsSUFBSSxFQUFFO1FBQ2IsSUFBSSxHQUFNLElBQUksQ0FBQyxJQUFJLFNBQUksSUFBTSxDQUFDO0tBQy9CO0lBRUQsT0FBTyxnQkFBZ0IsQ0FBQyxJQUFJLENBQUMsQ0FBQztBQUNoQyxDQUFDO0FBRUQsU0FBUyxpQkFBaUIsQ0FBQyxJQUFhLEVBQUUsTUFBYztJQUN0RCxJQUFNLFdBQVcsR0FBRyw2QkFBNkIsQ0FBQztJQUNsRCxJQUFNLFVBQVUsR0FBTSxNQUFNLGtCQUFlLENBQUM7SUFFNUMsSUFBSSxJQUFJLENBQUM7SUFDVCxJQUFJLElBQUksQ0FBQyxTQUFTLEVBQUU7UUFDbEIsSUFBSSxHQUFNLElBQUksQ0FBQyxTQUFTLFNBQUksVUFBVSxTQUFJLFdBQWEsQ0FBQztLQUN6RDtTQUFNO1FBQ0wsSUFBSSxHQUFNLFVBQVUsU0FBSSxXQUFhLENBQUM7S0FDdkM7SUFDRCxPQUFPLGdCQUFnQixDQUFDLElBQUksQ0FBQyxDQUFDO0FBQ2hDLENBQUM7QUFFRCxTQUFnQixNQUFNLENBQUMsT0FBTztJQUM1QixJQUFNLElBQUksR0FBRyxNQUFNLENBQUMsTUFBTSxDQUFDLEVBQUUsRUFBRSxPQUFPLENBQUMsQ0FBQztJQUV4QyxJQUFNLE1BQU0sR0FBRyxVQUFVLENBQUM7SUFFMUIsSUFBSSxDQUFDLGVBQWUsR0FBRyxlQUFlLENBQUMsSUFBSSxFQUFFLE1BQU0sQ0FBQyxDQUFDO0lBQ3JELElBQUksQ0FBQyxJQUFJLEdBQUcsWUFBWSxDQUFDLElBQUksRUFBRSxNQUFNLENBQUMsQ0FBQztJQUN2QyxJQUFJLENBQUMsU0FBUyxHQUFHLGlCQUFpQixDQUFDLElBQUksRUFBRSxPQUFPLENBQUMsQ0FBQztJQUVsRCxJQUFNLGlCQUFpQixHQUFNLE1BQU0sWUFBUyxDQUFDO0lBQzdDLElBQUksQ0FBQyxJQUFJLENBQUMsY0FBYyxFQUFFO1FBQ3hCLElBQUksQ0FBQyxjQUFjLEdBQUcsaUJBQWlCLENBQUM7S0FDekM7SUFFRCxPQUFPLElBQUksQ0FBQztBQUNkLENBQUM7QUFmRCx3QkFlQyJ9
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW52LmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiZmlsZTovLy9Vc2Vycy93YjQ0NzE4OC9EZXNrdG9wL25ldy1yZXBvL2ZjLWJ1aWxkL3NyYy91dGlscy9lbnYudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6Ijs7O0FBQUEsOENBQW9EO0FBR3BELElBQU0sT0FBTyxHQUFHO0lBQ2QsZ0JBQWdCO0lBQ2hCLFVBQVU7SUFDViwyQkFBMkI7SUFDM0IsWUFBWTtJQUNaLE1BQU07SUFDTix1QkFBdUI7SUFDdkIscUNBQXFDO0lBQ3JDLHFDQUFxQztJQUNyQyxxQ0FBcUM7Q0FDdEMsQ0FBQztBQUNGLElBQU0sUUFBUSxHQUFHLENBQUMsZ0JBQWdCLEVBQUUsaUJBQWlCLEVBQUUsVUFBVSxFQUFFLFdBQVcsRUFBRSxPQUFPLEVBQUUsTUFBTSxDQUFDLENBQUM7QUFDakcsSUFBTSxPQUFPLEdBQUcsQ0FBQyxPQUFPLEVBQUUseUJBQXlCLENBQUMsQ0FBQztBQUNyRCxJQUFNLE1BQU0sR0FBRyxDQUFDLE9BQU8sRUFBRSxXQUFXLEVBQUUsZ0JBQWdCLENBQUMsQ0FBQztBQUN4RCxJQUFNLFdBQVcsR0FBRyxDQUFDLGFBQWEsRUFBRSxvQkFBb0IsQ0FBQyxDQUFDO0FBRTFELFNBQVMsZ0JBQWdCLENBQUMsR0FBVztJQUNuQyxJQUFNLFdBQVcsR0FBRyxHQUFHLENBQUMsS0FBSyxDQUFDLEdBQUcsQ0FBQyxDQUFDO0lBQ25DLE9BQU8sYUFBQyxDQUFDLEtBQUssQ0FBQyxXQUFXLENBQUMsQ0FBQyxJQUFJLENBQUMsR0FBRyxDQUFDLENBQUM7QUFDeEMsQ0FBQztBQUVELFNBQVMsZUFBZSxDQUFDLElBQWEsRUFBRSxNQUFjO0lBQ3BELElBQUksT0FBTyxHQUFHLGFBQUMsQ0FBQyxLQUFLLENBQ25CLE9BQU8sQ0FBQyxHQUFHLENBQUMsVUFBQyxDQUFDLElBQUssT0FBRyxNQUFNLGFBQVEsQ0FBRyxFQUFwQixDQUFvQixDQUFDLEVBQ3hDLE1BQU0sQ0FDUCxDQUFDLElBQUksQ0FBQyxHQUFHLENBQUMsQ0FBQztJQUVaLElBQUksSUFBSSxDQUFDLGVBQWUsRUFBRTtRQUN4QixPQUFPLEdBQU0sSUFBSSxDQUFDLGVBQWUsU0FBSSxPQUFTLENBQUM7S0FDaEQ7SUFDRCxPQUFPLGdCQUFnQixDQUFDLE9BQU8sQ0FBQyxDQUFDO0FBQ25DLENBQUM7QUFFRCxTQUFTLFlBQVksQ0FBQyxJQUFhLEVBQUUsTUFBYztJQUNqRCxJQUFJLElBQUksR0FBRyxhQUFDLENBQUMsS0FBSyxDQUNoQixRQUFRLENBQUMsR0FBRyxDQUFDLFVBQUMsQ0FBQyxJQUFLLE9BQUcsTUFBTSxhQUFRLENBQUcsRUFBcEIsQ0FBb0IsQ0FBQyxFQUN6QyxPQUFPLEVBQ1AsV0FBVyxDQUFDLEdBQUcsQ0FBQyxVQUFDLENBQUMsSUFBSyxPQUFBLEtBQUcsTUFBTSxHQUFHLENBQUcsRUFBZixDQUFlLENBQUMsRUFDdkMsUUFBUSxDQUNULENBQUMsSUFBSSxDQUFDLEdBQUcsQ0FBQyxDQUFDO0lBRVosSUFBSSxJQUFJLENBQUMsSUFBSSxFQUFFO1FBQ2IsSUFBSSxHQUFNLElBQUksQ0FBQyxJQUFJLFNBQUksSUFBTSxDQUFDO0tBQy9CO0lBRUQsT0FBTyxnQkFBZ0IsQ0FBQyxJQUFJLENBQUMsQ0FBQztBQUNoQyxDQUFDO0FBRUQsU0FBUyxpQkFBaUIsQ0FBQyxJQUFhLEVBQUUsTUFBYztJQUN0RCxJQUFNLFdBQVcsR0FBRyw2QkFBNkIsQ0FBQztJQUNsRCxJQUFNLFVBQVUsR0FBTSxNQUFNLGtCQUFlLENBQUM7SUFFNUMsSUFBSSxJQUFJLENBQUM7SUFDVCxJQUFJLElBQUksQ0FBQyxTQUFTLEVBQUU7UUFDbEIsSUFBSSxHQUFNLElBQUksQ0FBQyxTQUFTLFNBQUksVUFBVSxTQUFJLFdBQWEsQ0FBQztLQUN6RDtTQUFNO1FBQ0wsSUFBSSxHQUFNLFVBQVUsU0FBSSxXQUFhLENBQUM7S0FDdkM7SUFDRCxPQUFPLGdCQUFnQixDQUFDLElBQUksQ0FBQyxDQUFDO0FBQ2hDLENBQUM7QUFFRCxTQUFnQixNQUFNLENBQUMsT0FBTztJQUM1QixJQUFNLElBQUksR0FBRyxNQUFNLENBQUMsTUFBTSxDQUFDLEVBQUUsRUFBRSxPQUFPLENBQUMsQ0FBQztJQUV4QyxJQUFNLE1BQU0sR0FBRyxVQUFVLENBQUM7SUFFMUIsSUFBSSxDQUFDLGVBQWUsR0FBRyxlQUFlLENBQUMsSUFBSSxFQUFFLE1BQU0sQ0FBQyxDQUFDO0lBQ3JELElBQUksQ0FBQyxJQUFJLEdBQUcsWUFBWSxDQUFDLElBQUksRUFBRSxNQUFNLENBQUMsQ0FBQztJQUN2QyxJQUFJLENBQUMsU0FBUyxHQUFHLGlCQUFpQixDQUFDLElBQUksRUFBRSxPQUFPLENBQUMsQ0FBQztJQUVsRCxJQUFNLGlCQUFpQixHQUFNLE1BQU0sWUFBUyxDQUFDO0lBQzdDLElBQUksQ0FBQyxJQUFJLENBQUMsY0FBYyxFQUFFO1FBQ3hCLElBQUksQ0FBQyxjQUFjLEdBQUcsaUJBQWlCLENBQUM7S0FDekM7SUFFRCxPQUFPLElBQUksQ0FBQztBQUNkLENBQUM7QUFmRCx3QkFlQyJ9
 
 /***/ }),
 
@@ -121548,7 +122016,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.processFunfile = exports.processFunfileForBuildkit = exports.getFunfile = void 0;
-var lodash_1 = __importDefault(__webpack_require__(90250));
+var core_1 = __webpack_require__(67782);
 var path_1 = __importDefault(__webpack_require__(85622));
 var fs_extra_1 = __importDefault(__webpack_require__(5630));
 var logger_1 = __importDefault(__webpack_require__(88989));
@@ -121678,7 +122146,7 @@ function getWorkDir(funfilePath) {
                     if (!(_i < _a.length)) return [3 /*break*/, 4];
                     line = _a[_i];
                     if (line.startsWith('WORKDIR ')) {
-                        src = lodash_1.default.compact(line.split(' '))[1];
+                        src = core_1.lodash.compact(line.split(' '))[1];
                         return [2 /*return*/, src + "/."];
                     }
                     _b.label = 3;
@@ -121706,16 +122174,18 @@ function processFunfileForBuildkit(serviceConfig, codeUri, funfilePath, baseDir,
                     return [4 /*yield*/, convertFunfileToDockerfile(funfilePath, dockerfilePath, runtime, serviceConfig.name, functionName)];
                 case 1:
                     _a.sent();
-                    fromSrcToDstPairs = [{
+                    fromSrcToDstPairs = [
+                        {
                             src: '/code',
                             dst: funcArtifactDir,
-                        }];
+                        },
+                    ];
                     targetBuildStage = 'buildresult';
                     return [4 /*yield*/, buildkit_1.formatDockerfileForBuildkit(dockerfilePath, fromSrcToDstPairs, baseDir, targetBuildStage)];
                 case 2:
                     _a.sent();
                     if (enableBuildkitServer) {
-                        child_process_1.execSync("buildctl --addr tcp://localhost:" + buildkitServerPort + " build --no-cache --frontend dockerfile.v0 --local context=" + baseDir + " --local dockerfile=" + path_1.default.dirname(dockerfilePath) + " --opt target=" + targetBuildStage + " --opt filename=" + path_1.default.basename(dockerfilePath) + " --output type=local,dest=" + baseDir, {
+                        child_process_1.execSync("buildctl --addr tcp://" + utils_1.buildkitServerAddr + ":" + buildkitServerPort + " build --no-cache --frontend dockerfile.v0 --local context=" + baseDir + " --local dockerfile=" + path_1.default.dirname(dockerfilePath) + " --opt target=" + targetBuildStage + " --opt filename=" + path_1.default.basename(dockerfilePath) + " --output type=local,dest=" + baseDir, {
                             stdio: 'inherit',
                         });
                     }
@@ -121777,7 +122247,7 @@ function processFunfile(serviceName, codeUri, funfilePath, funcArtifactDir, runt
     });
 }
 exports.processFunfile = processFunfile;
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5zdGFsbC1maWxlLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiZmlsZTovLy9Vc2Vycy93YjQ0NzE4OC9EZXNrdG9wL25ldy1yZXBvL2ZjLWJ1aWxkL3NyYy91dGlscy9pbnN0YWxsLWZpbGUudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7OztBQUFBLGtEQUF1QjtBQUN2Qiw4Q0FBd0I7QUFDeEIsc0RBQTBCO0FBQzFCLDREQUFzQztBQUN0QywrQ0FBbUM7QUFDbkMsaUNBQW9DO0FBQ3BDLG1DQUFxRDtBQUVyRCx1Q0FBeUQ7QUFDekQsK0NBQXlDO0FBRXpDLElBQU0sSUFBSSxHQUFHLE9BQU8sQ0FBQyxNQUFNLENBQUMsQ0FBQztBQUU3QixTQUFlLFVBQVUsQ0FBQyxRQUFnQjs7Ozt3QkFDcEMscUJBQU0sa0JBQUUsQ0FBQyxVQUFVLENBQUMsUUFBUSxDQUFDLEVBQUE7O3lCQUE3QixTQUE2QixFQUE3Qix3QkFBNkI7b0JBQ3ZCLHFCQUFNLGtCQUFFLENBQUMsSUFBSSxDQUFDLFFBQVEsQ0FBQyxFQUFBO3dCQUEvQixzQkFBTyxDQUFDLFNBQXVCLENBQUMsQ0FBQyxNQUFNLEVBQUUsRUFBQzt3QkFFNUMsc0JBQU8sS0FBSyxFQUFDOzs7O0NBQ2Q7QUFFRCxTQUFzQixVQUFVLENBQUMsRUFFdUI7UUFEdEQsT0FBTyxhQUFBLEVBQUUsT0FBTyxhQUFBLEVBQUUsT0FBTyxhQUFBOzs7Ozs7b0JBRW5CLFdBQVcsR0FBRyxjQUFJLENBQUMsSUFBSSxDQUFDLE9BQU8sRUFBRSxTQUFTLENBQUMsQ0FBQztvQkFDNUIscUJBQU0sVUFBVSxDQUFDLFdBQVcsQ0FBQyxFQUFBOztvQkFBN0MsYUFBYSxHQUFHLFNBQTZCO29CQUNuRCxnQkFBTSxDQUFDLEtBQUssQ0FBQyxtQkFBaUIsV0FBVyx1QkFBa0IsYUFBZSxDQUFDLENBQUM7b0JBRXRFLGVBQWUs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
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5zdGFsbC1maWxlLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiZmlsZTovLy9Vc2Vycy93YjQ0NzE4OC9EZXNrdG9wL25ldy1yZXBvL2ZjLWJ1aWxkL3NyYy91dGlscy9pbnN0YWxsLWZpbGUudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7OztBQUFBLDhDQUFvRDtBQUNwRCw4Q0FBd0I7QUFDeEIsc0RBQTBCO0FBQzFCLDREQUFzQztBQUN0QywrQ0FBbUM7QUFDbkMsaUNBQXdEO0FBQ3hELG1DQUFxRDtBQUVyRCx1Q0FBeUQ7QUFDekQsK0NBQXlDO0FBRXpDLElBQU0sSUFBSSxHQUFHLE9BQU8sQ0FBQyxNQUFNLENBQUMsQ0FBQztBQUU3QixTQUFlLFVBQVUsQ0FBQyxRQUFnQjs7Ozt3QkFDcEMscUJBQU0sa0JBQUUsQ0FBQyxVQUFVLENBQUMsUUFBUSxDQUFDLEVBQUE7O3lCQUE3QixTQUE2QixFQUE3Qix3QkFBNkI7b0JBQ3ZCLHFCQUFNLGtCQUFFLENBQUMsSUFBSSxDQUFDLFFBQVEsQ0FBQyxFQUFBO3dCQUEvQixzQkFBTyxDQUFDLFNBQXVCLENBQUMsQ0FBQyxNQUFNLEVBQUUsRUFBQzt3QkFFNUMsc0JBQU8sS0FBSyxFQUFDOzs7O0NBQ2Q7QUFFRCxTQUFzQixVQUFVLENBQUMsRUFRaEM7UUFQQyxPQUFPLGFBQUEsRUFDUCxPQUFPLGFBQUEsRUFDUCxPQUFPLGFBQUE7Ozs7OztvQkFNRCxXQUFXLEdBQUcsY0FBSSxDQUFDLElBQUksQ0FBQyxPQUFPLEVBQUUsU0FBUyxDQUFDLENBQUM7b0JBQzVCLHFCQUFNLFVBQVUsQ0FBQyxXQUFXLENBQUMsRUFBQTs7b0JBQTdDLGFBQWEsR0FBRyxTQUE2QjtvQkFDbkQsZ0JBQU0sQ0FBQyxLQUFLLENBQUMsbUJBQWlCLFdBQVcsdUJBQWtCLGFBQWUsQ0FBQyxDQUFDO29CQUV0RSxlQUFlLEdB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
 
 /***/ }),
 
@@ -122081,15 +122551,20 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.funfileToDockerfile = void 0;
-var lodash_1 = __importDefault(__webpack_require__(90250));
+var core_1 = __webpack_require__(67782);
 var fs_extra_1 = __importDefault(__webpack_require__(5630));
 var dockerfile_ast_1 = __webpack_require__(80989);
 var logger_1 = __importDefault(__webpack_require__(88989));
 var get_image_name_1 = __webpack_require__(25231);
 var RESERVED_DOCKER_CMD = [
-    'FROM', 'Add', 'ONBUILD',
-    'ARG', 'CMD', 'ENTRYPOINT',
-    'VOLUME', 'STOPSIGNAL'
+    'FROM',
+    'Add',
+    'ONBUILD',
+    'ARG',
+    'CMD',
+    'ENTRYPOINT',
+    'VOLUME',
+    'STOPSIGNAL',
 ];
 function funfileToDockerfile(funfilePath, runtime, serviceName, functionName) {
     return __awaiter(this, void 0, void 0, function () {
@@ -122107,7 +122582,7 @@ function funfileToDockerfile(funfilePath, runtime, serviceName, functionName) {
                     if (!(_i < _a.length)) return [3 /*break*/, 6];
                     instruction = _a[_i];
                     ins = instruction.getInstruction();
-                    if (lodash_1.default.includes(RESERVED_DOCKER_CMD, ins)) {
+                    if (core_1.lodash.includes(RESERVED_DOCKER_CMD, ins)) {
                         throw new Error("Currently, Funfile does not support the semantics of '" + ins + "'.\nIf you have a requirement, you can submit the issue at https://github.com/devsapp/fc/issues.");
                     }
                     if (!(ins.toUpperCase() === 'RUNTIME')) return [3 /*break*/, 4];
@@ -122117,7 +122592,7 @@ function funfileToDockerfile(funfilePath, runtime, serviceName, functionName) {
                     }
                     runtimeOfFunfile = runtimeArgs[0].getValue();
                     if (runtimeOfFunfile !== runtime) {
-                        logger_1.default.warning("\nDetectionWarning: The 'runtime' of '" + serviceName + "/" + functionName + "' in your yml is inconsistent with that in Funfile.");
+                        logger_1.default.warn("\nDetectionWarning: The 'runtime' of '" + serviceName + "/" + functionName + "' in your yml is inconsistent with that in Funfile.");
                     }
                     return [4 /*yield*/, get_image_name_1.resolveRuntimeToDockerImage(runtimeOfFunfile)];
                 case 3:
@@ -122138,7 +122613,7 @@ function funfileToDockerfile(funfilePath, runtime, serviceName, functionName) {
     });
 }
 exports.funfileToDockerfile = funfileToDockerfile;
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoicGFyc2VyLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiZmlsZTovLy9Vc2Vycy93YjQ0NzE4OC9EZXNrdG9wL25ldy1yZXBvL2ZjLWJ1aWxkL3NyYy91dGlscy9wYXJzZXIudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IjtBQUFBLHFDQUFxQzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7O0FBRXJDLGtEQUF1QjtBQUN2QixzREFBMEI7QUFDMUIsaURBQWtEO0FBQ2xELDREQUFzQztBQUN0QyxtREFBK0Q7QUFHL0QsSUFBTSxtQkFBbUIsR0FBRztJQUMxQixNQUFNLEVBQUUsS0FBSyxFQUFFLFNBQVM7SUFDeEIsS0FBSyxFQUFFLEtBQUssRUFBRSxZQUFZO0lBQzFCLFFBQVEsRUFBRSxZQUFZO0NBQUMsQ0FBQztBQUUxQixTQUFzQixtQkFBbUIsQ0FBQyxXQUFtQixFQUFFLE9BQWUsRUFBRSxXQUFtQixFQUFFLFlBQW9COzs7Ozt3QkFDdkcscUJBQU0sa0JBQUUsQ0FBQyxRQUFRLENBQUMsV0FBVyxFQUFFLE1BQU0sQ0FBQyxFQUFBOztvQkFBaEQsT0FBTyxHQUFHLFNBQXNDO29CQUVoRCxPQUFPLEdBQUcsaUNBQWdCLENBQUMsS0FBSyxDQUFDLE9BQU8sQ0FBQyxDQUFDO29CQUUxQyxVQUFVLEdBQUcsRUFBRSxDQUFDOzBCQUU2QixFQUF6QixLQUFBLE9BQU8sQ0FBQyxlQUFlLEVBQUU7Ozt5QkFBekIsQ0FBQSxjQUF5QixDQUFBO29CQUF4QyxXQUFXO29CQUNkLEdBQUcsR0FBRyxXQUFXLENBQUMsY0FBYyxFQUFFLENBQUM7b0JBRXpDLElBQUksZ0JBQUMsQ0FBQyxRQUFRLENBQUMsbUJBQW1CLEVBQUUsR0FBRyxDQUFDLEVBQUU7d0JBQ3hDLE1BQU0sSUFBSSxLQUFLLENBQUMsMkRBQXlELEdBQUcscUdBQ1csQ0FBQyxDQUFDO3FCQUMxRjt5QkFFRyxDQUFBLEdBQUcsQ0FBQyxXQUFXLEVBQUUsS0FBSyxTQUFTLENBQUEsRUFBL0Isd0JBQStCO29CQUMzQixXQUFXLEdBQUcsV0FBVyxDQUFDLFlBQVksRUFBRSxDQUFDO29CQUUvQyxJQUFJLFdBQVcsQ0FBQyxNQUFNLEtBQUssQ0FBQyxFQUFFO3dCQUM1QixNQUFNLElBQUksS0FBSyxDQUFDLDZCQUE2QixDQUFDLENBQUM7cUJBQ2hEO29CQUVLLGdCQUFnQixHQUFHLFdBQVcsQ0FBQyxDQUFDLENBQUMsQ0FBQyxRQUFRLEVBQUUsQ0FBQztvQkFFbkQsSUFBSSxnQkFBZ0IsS0FBSyxPQUFPLEVBQUU7d0JBQ2hDLGdCQUFNLENBQUMsT0FBTyxDQUFDLDJDQUF5QyxXQUFXLFNBQUksWUFBWSx3REFBcUQsQ0FBQyxDQUFDO3FCQUMzSTtvQkFFaUIscUJBQU0sNENBQTJCLENBQUMsZ0JBQWdCLENBQUMsRUFBQTs7b0JBQS9ELFNBQVMsR0FBRyxTQUFtRDtvQkFDckUsVUFBVSxDQUFDLElBQUksQ0FBQyxVQUFTLFNBQVMsWUFBUSxnQkFBa0IsQ0FBQyxDQUFDOzs7b0JBRXhELEtBQUssR0FBRyxXQUFXLENBQUMsUUFBUSxFQUFFLENBQUM7b0JBQ3JDLGdCQUFnQjtvQkFDaEIsVUFBVSxDQUFDLElBQUksQ0FBQyxXQUFXLENBQUMsZUFBZSxDQUFDLEtBQUssQ0FBQyxDQUFDLENBQUM7OztvQkExQjlCLElBQXlCLENBQUE7O3dCQThCbkQsc0JBQU8sVUFBVSxDQUFDLElBQUksQ0FBQyxJQUFJLENBQUMsRUFBQzs7OztDQUM5QjtBQXRDRCxrREFzQ0MifQ==
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoicGFyc2VyLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiZmlsZTovLy9Vc2Vycy93YjQ0NzE4OC9EZXNrdG9wL25ldy1yZXBvL2ZjLWJ1aWxkL3NyYy91dGlscy9wYXJzZXIudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IjtBQUFBLHFDQUFxQzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7O0FBRXJDLDhDQUFvRDtBQUNwRCxzREFBMEI7QUFDMUIsaURBQWtEO0FBQ2xELDREQUFzQztBQUN0QyxtREFBK0Q7QUFFL0QsSUFBTSxtQkFBbUIsR0FBRztJQUMxQixNQUFNO0lBQ04sS0FBSztJQUNMLFNBQVM7SUFDVCxLQUFLO0lBQ0wsS0FBSztJQUNMLFlBQVk7SUFDWixRQUFRO0lBQ1IsWUFBWTtDQUNiLENBQUM7QUFFRixTQUFzQixtQkFBbUIsQ0FDdkMsV0FBbUIsRUFDbkIsT0FBZSxFQUNmLFdBQW1CLEVBQ25CLFlBQW9COzs7Ozt3QkFFSixxQkFBTSxrQkFBRSxDQUFDLFFBQVEsQ0FBQyxXQUFXLEVBQUUsTUFBTSxDQUFDLEVBQUE7O29CQUFoRCxPQUFPLEdBQUcsU0FBc0M7b0JBRWhELE9BQU8sR0FBRyxpQ0FBZ0IsQ0FBQyxLQUFLLENBQUMsT0FBTyxDQUFDLENBQUM7b0JBRTFDLFVBQVUsR0FBRyxFQUFFLENBQUM7MEJBRTZCLEVBQXpCLEtBQUEsT0FBTyxDQUFDLGVBQWUsRUFBRTs7O3lCQUF6QixDQUFBLGNBQXlCLENBQUE7b0JBQXhDLFdBQVc7b0JBQ2QsR0FBRyxHQUFHLFdBQVcsQ0FBQyxjQUFjLEVBQUUsQ0FBQztvQkFFekMsSUFBSSxhQUFDLENBQUMsUUFBUSxDQUFDLG1CQUFtQixFQUFFLEdBQUcsQ0FBQyxFQUFFO3dCQUN4QyxNQUFNLElBQUksS0FBSyxDQUFDLDJEQUF5RCxHQUFHLHFHQUNXLENBQUMsQ0FBQztxQkFDMUY7eUJBRUcsQ0FBQSxHQUFHLENBQUMsV0FBVyxFQUFFLEtBQUssU0FBUyxDQUFBLEVBQS9CLHdCQUErQjtvQkFDM0IsV0FBVyxHQUFHLFdBQVcsQ0FBQyxZQUFZLEVBQUUsQ0FBQztvQkFFL0MsSUFBSSxXQUFXLENBQUMsTUFBTSxLQUFLLENBQUMsRUFBRTt3QkFDNUIsTUFBTSxJQUFJLEtBQUssQ0FBQyw2QkFBNkIsQ0FBQyxDQUFDO3FCQUNoRDtvQkFFSyxnQkFBZ0IsR0FBRyxXQUFXLENBQUMsQ0FBQyxDQUFDLENBQUMsUUFBUSxFQUFFLENBQUM7b0JBRW5ELElBQUksZ0JBQWdCLEtBQUssT0FBTyxFQUFFO3dCQUNoQyxnQkFBTSxDQUFDLElBQUksQ0FDVCwyQ0FBeUMsV0FBVyxTQUFJLFlBQVksd0RBQXFELENBQzFILENBQUM7cUJBQ0g7b0JBRWlCLHFCQUFNLDRDQUEyQixDQUFDLGdCQUFnQixDQUFDLEVBQUE7O29CQUEvRCxTQUFTLEdBQUcsU0FBbUQ7b0JBQ3JFLFVBQVUsQ0FBQyxJQUFJLENBQUMsVUFBUSxTQUFTLFlBQU8sZ0JBQWtCLENBQUMsQ0FBQzs7O29CQUV0RCxLQUFLLEdBQUcsV0FBVyxDQUFDLFFBQVEsRUFBRSxDQUFDO29CQUNyQyxnQkFBZ0I7b0JBQ2hCLFVBQVUsQ0FBQyxJQUFJLENBQUMsV0FBVyxDQUFDLGVBQWUsQ0FBQyxLQUFLLENBQUMsQ0FBQyxDQUFDOzs7b0JBNUI5QixJQUF5QixDQUFBOzt3QkFnQ25ELHNCQUFPLFVBQVUsQ0FBQyxJQUFJLENBQUMsSUFBSSxDQUFDLEVBQUM7Ozs7Q0FDOUI7QUE3Q0Qsa0RBNkNDIn0=
 
 /***/ }),
 
@@ -122268,16 +122743,20 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
-var _a, _b;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.resolveLibPathsFromLdConf = exports.readLines = exports.checkCodeUri = exports.getExcludeFilesEnv = exports.sleep = exports.isDebug = void 0;
+exports.removeBuildCache = exports.resolveLibPathsFromLdConf = exports.readLines = exports.checkCodeUri = exports.getExcludeFilesEnv = exports.sleep = exports.buildkitServerAddr = exports.compelUseBuildkit = exports.useKaniko = exports.isDebug = void 0;
 var core_1 = __webpack_require__(67782);
-var constant_1 = __webpack_require__(89381);
-var lodash_1 = __importDefault(__webpack_require__(90250));
 var path_1 = __importDefault(__webpack_require__(85622));
+var rimraf_1 = __importDefault(__webpack_require__(14959));
 var readline_1 = __importDefault(__webpack_require__(51058));
 var fs_extra_1 = __importDefault(__webpack_require__(5630));
-exports.isDebug = (_b = (_a = process.env) === null || _a === void 0 ? void 0 : _a.temp_params) === null || _b === void 0 ? void 0 : _b.includes('--debug');
+var logger_1 = __importDefault(__webpack_require__(88989));
+var constant_1 = __webpack_require__(89381);
+exports.isDebug = core_1.isDebugMode() || false;
+var _a = process.env, BUILD_IMAGE_ENV = _a.BUILD_IMAGE_ENV, enableBuildkitServer = _a.enableBuildkitServer, buildkitServerPort = _a.buildkitServerPort;
+exports.useKaniko = BUILD_IMAGE_ENV === constant_1.FC_BACKEND;
+exports.compelUseBuildkit = core_1.lodash.isEqual(enableBuildkitServer, '1') && /^\d+$/.test(buildkitServerPort || '');
+exports.buildkitServerAddr = process.env.buildkitServerAddr || 'localhost';
 function sleep(ms) {
     return new Promise(function (resolve) {
         setTimeout(resolve, ms);
@@ -122285,23 +122764,20 @@ function sleep(ms) {
 }
 exports.sleep = sleep;
 function getExcludeFilesEnv() {
-    return [
-        '.s',
-        's.yml',
-    ].join(';');
+    return ['.s', 's.yml'].join(';');
 }
 exports.getExcludeFilesEnv = getExcludeFilesEnv;
 function checkCodeUri(codeUri) {
     if (!codeUri) {
         return '';
     }
-    var src = lodash_1.default.isString(codeUri) ? codeUri : codeUri.src;
+    var src = core_1.lodash.isString(codeUri) ? codeUri : codeUri.src;
     if (!src) {
-        core_1.Logger.info(constant_1.CONTEXT, 'No Src configured, skip building.');
+        logger_1.default.info('No Src configured, skip building.');
         return '';
     }
-    if (lodash_1.default.endsWith(src, '.zip') || lodash_1.default.endsWith(src, '.jar') || lodash_1.default.endsWith(src, '.war')) {
-        core_1.Logger.info(constant_1.CONTEXT, 'Artifact configured, skip building.');
+    if (core_1.lodash.endsWith(src, '.zip') || core_1.lodash.endsWith(src, '.jar') || core_1.lodash.endsWith(src, '.war')) {
+        logger_1.default.info('Artifact configured, skip building.');
         return '';
     }
     return src;
@@ -122339,7 +122815,7 @@ function resolveLibPaths(confdPath) {
                         }); }); }))];
                 case 1:
                     confLines = _a.sent();
-                    return [2 /*return*/, lodash_1.default.flatten(confLines).reduce(function (lines, line) {
+                    return [2 /*return*/, core_1.lodash.flatten(confLines).reduce(function (lines, line) {
                             // remove the first and last blanks and leave only the middle
                             var found = line.match(/^\s*(\/.*)\s*$/);
                             if (found && found[1].startsWith('/')) {
@@ -122373,7 +122849,7 @@ function resolveLibPathsFromLdConf(baseDir, codeUri) {
                     return [4 /*yield*/, resolveLibPaths(confdPath)];
                 case 3:
                     libPaths = _a.sent();
-                    if (!lodash_1.default.isEmpty(libPaths)) {
+                    if (!core_1.lodash.isEmpty(libPaths)) {
                         envs.LD_LIBRARY_PATH = libPaths.map(function (p) { return "/code/.s/root" + p; }).join(':');
                     }
                     return [2 /*return*/, envs];
@@ -122382,7 +122858,44 @@ function resolveLibPathsFromLdConf(baseDir, codeUri) {
     });
 }
 exports.resolveLibPathsFromLdConf = resolveLibPathsFromLdConf;
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoidXRpbHMuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyJmaWxlOi8vL1VzZXJzL3diNDQ3MTg4L0Rlc2t0b3AvbmV3LXJlcG8vZmMtYnVpbGQvc3JjL3V0aWxzL3V0aWxzLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7QUFBQSw4Q0FBK0M7QUFDL0MsdUNBQXFDO0FBQ3JDLGtEQUF1QjtBQUN2Qiw4Q0FBd0I7QUFDeEIsc0RBQWdDO0FBQ2hDLHNEQUEwQjtBQUliLFFBQUEsT0FBTyxlQUFHLE9BQU8sQ0FBQyxHQUFHLDBDQUFFLFdBQVcsMENBQUUsUUFBUSxDQUFDLFNBQVMsRUFBRTtBQUVyRSxTQUFnQixLQUFLLENBQUMsRUFBVTtJQUM5QixPQUFPLElBQUksT0FBTyxDQUFDLFVBQUMsT0FBTztRQUN6QixVQUFVLENBQUMsT0FBTyxFQUFFLEVBQUUsQ0FBQyxDQUFDO0lBQzFCLENBQUMsQ0FBQyxDQUFDO0FBQ0wsQ0FBQztBQUpELHNCQUlDO0FBRUQsU0FBZ0Isa0JBQWtCO0lBQ2hDLE9BQU87UUFDTCxJQUFJO1FBQ0osT0FBTztLQUNSLENBQUMsSUFBSSxDQUFDLEdBQUcsQ0FBQyxDQUFDO0FBQ2QsQ0FBQztBQUxELGdEQUtDO0FBRUQsU0FBZ0IsWUFBWSxDQUFDLE9BQTBCO0lBQ3JELElBQUksQ0FBQyxPQUFPLEVBQUU7UUFDWixPQUFPLEVBQUUsQ0FBQztLQUNYO0lBRUQsSUFBTSxHQUFHLEdBQUcsZ0JBQUMsQ0FBQyxRQUFRLENBQUMsT0FBTyxDQUFDLENBQUMsQ0FBQyxDQUFDLE9BQU8sQ0FBQyxDQUFDLENBQUMsT0FBTyxDQUFDLEdBQUcsQ0FBQztJQUV4RCxJQUFJLENBQUMsR0FBRyxFQUFFO1FBQ1IsYUFBTSxDQUFDLElBQUksQ0FBQyxrQkFBTyxFQUFFLG1DQUFtQyxDQUFDLENBQUM7UUFDMUQsT0FBTyxFQUFFLENBQUM7S0FDWDtJQUVELElBQUksZ0JBQUMs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
+function removeBuildCache(fcCore, baseDir, serviceName, functionName) {
+    return __awaiter(this, void 0, void 0, function () {
+        var artifactPath, _ex_1, buildFilesListJSONPath, _ex_2;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    artifactPath = fcCore.getBuildArtifactPath(baseDir, serviceName, functionName);
+                    _a.label = 1;
+                case 1:
+                    _a.trys.push([1, 4, , 5]);
+                    if (!fs_extra_1.default.pathExistsSync(artifactPath)) return [3 /*break*/, 3];
+                    return [4 /*yield*/, new Promise(function (resolve) {
+                            rimraf_1.default(artifactPath, function () { return resolve(''); });
+                        })];
+                case 2:
+                    _a.sent();
+                    _a.label = 3;
+                case 3: return [3 /*break*/, 5];
+                case 4:
+                    _ex_1 = _a.sent();
+                    return [3 /*break*/, 5];
+                case 5:
+                    _a.trys.push([5, 7, , 8]);
+                    buildFilesListJSONPath = fcCore.genBuildLinkFilesListJSONPath(baseDir, serviceName, functionName);
+                    return [4 /*yield*/, fs_extra_1.default.remove(buildFilesListJSONPath)];
+                case 6:
+                    _a.sent();
+                    return [3 /*break*/, 8];
+                case 7:
+                    _ex_2 = _a.sent();
+                    return [3 /*break*/, 8];
+                case 8: return [2 /*return*/];
+            }
+        });
+    });
+}
+exports.removeBuildCache = removeBuildCache;
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoidXRpbHMuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyJmaWxlOi8vL1VzZXJzL3diNDQ3MTg4L0Rlc2t0b3AvbmV3LXJlcG8vZmMtYnVpbGQvc3JjL3V0aWxzL3V0aWxzLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7OztBQUFBLDhDQUFpRTtBQUNqRSw4Q0FBd0I7QUFDeEIsa0RBQTRCO0FBQzVCLHNEQUFnQztBQUNoQyxzREFBMEI7QUFDMUIsNERBQXNDO0FBR3RDLHVDQUF3QztBQUUzQixRQUFBLE9BQU8sR0FBRyxrQkFBVyxFQUFFLElBQUksS0FBSyxDQUFDO0FBRXhDLElBQUEsS0FBZ0UsT0FBTyxDQUFDLEdBQUcsRUFBekUsZUFBZSxxQkFBQSxFQUFFLG9CQUFvQiwwQkFBQSxFQUFFLGtCQUFrQix3QkFBZ0IsQ0FBQztBQUNyRSxRQUFBLFNBQVMsR0FBRyxlQUFlLEtBQUsscUJBQVUsQ0FBQztBQUMzQyxRQUFBLGlCQUFpQixHQUM1QixhQUFDLENBQUMsT0FBTyxDQUFDLG9CQUFvQixFQUFFLEdBQUcsQ0FBQyxJQUFJLE9BQU8sQ0FBQyxJQUFJLENBQUMsa0JBQWtCLElBQUksRUFBRSxDQUFDLENBQUM7QUFDcEUsUUFBQSxrQkFBa0IsR0FBRyxPQUFPLENBQUMsR0FBRyxDQUFDLGtCQUFrQixJQUFJLFdBQVcsQ0FBQztBQUVoRixTQUFnQixLQUFLLENBQUMsRUFBVTtJQUM5QixPQUFPLElBQUksT0FBTyxDQUFDLFVBQUMsT0FBTztRQUN6QixVQUFVLENBQUMsT0FBTyxFQUFFLEVBQUUsQ0FBQyxDQUFDO0lBQzFCLENBQUMsQ0FBQyxDQUFDO0FBQ0wsQ0FBQztBQUpELHNCQUlDO0FBRUQsU0FBZ0Isa0JBQWtCO0lBQ2hDLE9BQU8sQ0FBQyxJQUFJLEVBQUUsT0FBTyxDQUFDLENBQUMsSUFBSSxDQUFDLEdBQUcsQ0FBQyxDQUFDO0FBQ25DLENBQUM7QUFGRCxnREFFQztB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
 
 /***/ }),
 
@@ -122494,7 +123007,7 @@ module.exports = {"version":"1.2.5"};
 /***/ ((module) => {
 
 "use strict";
-module.exports = {"i8":"1.9.0"};
+module.exports = {"i8":"1.10.0"};
 
 /***/ }),
 

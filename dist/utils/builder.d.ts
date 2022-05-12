@@ -1,4 +1,3 @@
-import { ILogger } from '@serverless-devs/core';
 import { IBuildInput, ICodeUri, IBuildDir } from '../interface';
 interface INeedBuild {
     baseDir: string;
@@ -9,31 +8,40 @@ interface IBuildOutput {
     image?: string;
     buildSaveUri?: string;
 }
+interface IArgsPayload {
+    customEnv?: string[];
+    additionalArgs?: string[];
+    scriptFile?: string;
+    command?: string;
+}
+interface IUseModel {
+    useSandbox: boolean;
+    useKaniko: boolean;
+    useBuildkit: boolean;
+    useDocker: boolean;
+}
 export default class Builder {
-    logger: ILogger;
-    private readonly useDocker;
-    private dockerfile;
-    private fcCore;
-    private projectName;
-    private configDirPath;
+    static readonly stages: string[];
+    static readonly buildkitServerPort: number;
+    static readonly enableBuildkitServer: boolean;
+    private readonly fcCore;
+    private readonly projectName;
+    private readonly configDirPath;
+    private readonly argsPayload;
     private readonly useBuildkit;
-    private readonly enableBuildkitServer;
-    private readonly buildkitServerPort;
-    private readonly buildkitServerAddr;
-    static defaultbuildkitServerAddr: string;
-    static stages: string[];
-    static defaultbuildkitServerPort: number;
-    private buildImageEnv;
-    constructor(projectName: string, useDocker: boolean, dockerfile: string, configPath: string, useBuildkit: boolean, fcCore: any);
+    private readonly useKaniko;
+    private readonly useSandbox;
+    private readonly useDocker;
+    constructor(projectName: string, configDirPath: string, fcCore: any, useModel: IUseModel, argsPayload?: IArgsPayload);
+    build(buildInput: IBuildInput): Promise<IBuildOutput>;
     private checkCustomContainerConfig;
     private buildImageWithBuildkit;
     private buildImageWithKaniko;
-    buildImage(buildInput: IBuildInput): Promise<string>;
-    build(buildInput: IBuildInput): Promise<IBuildOutput>;
+    buildImage(dockerFileName: string, imageName: string): Promise<string>;
     private buildInBuildtkit;
     buildInDocker({ region, serviceName, serviceProps, functionName, functionProps, verbose, credentials, }: IBuildInput, baseDir: string, codeUri: string, funcArtifactDir: string): Promise<void>;
     buildArtifact({ serviceName, functionName, functionProps, verbose }: IBuildInput, _baseDir: string, codeUri: string, funcArtifactDir: string): Promise<void>;
-    codeSkipBuild({ baseDir, codeUri, runtime }: INeedBuild): Promise<boolean>;
+    codeBuild({ baseDir, codeUri, runtime }: INeedBuild): Promise<boolean>;
     isOnlyDefaultTaskFlow(taskFlows: any): boolean;
     initBuildArtifactDir({ baseDir, serviceName, functionName }: IBuildDir): Promise<string>;
 }
