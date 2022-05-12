@@ -11,9 +11,14 @@
 
 用户指定的 `--use-sandbox`、`--use-docker`、`--use-buildkit` 均不生效。
 
+<!-- custom-container 函数不支持 --custom-args、--custom-env、 --command 和 --script-file 参数。 -->
+
+其他的 runtime 支持 --custom-args、 --command 和 --script-file 参数。
+
 ### 代码输出目录
 
-用户指定的 codeuri 目录
+- 如果指定了 --command 和 --script-file 参数，输出目录为用户指定的 codeuri 目录。
+- 如果没有指定 --command 和 --script-file 参数，输出目录和本地环境行为一致。
 
 ## Buildkit
 
@@ -27,9 +32,12 @@
 
 用户指定的 `--use-sandbox`、`--use-docker` 均不生效。
 
+支持 --custom-args、--custom-env、 --command 和 --script-file 参数
+
 ### 代码输出目录
 
-非 custom-container 函数输出目为用户指定的 codeuri 目录（context 字段）
+- 如果指定了 --command、--script-file：用户指定的 codeuri 目录
+- 其他：和 yaml 同级目录的 .s/build/artifacts/{serviceName}/{functionName}
 
 ## Sandbox
 
@@ -40,6 +48,8 @@
 ### 对参数影响
 
 用户指定的 `--custom-args`、`--command`、`--script-file`、`--use-docker` 不生效。
+
+仅支持 --custom-env 参数。
 
 ### 代码输出目录
 
@@ -54,12 +64,20 @@
 
 ### 代码输出目录
 
-非 custom-container 函数代码挂载输出目录：
-
 - 如果指定了 --command、--script-file：用户指定的 codeuri 目录
 - 其他：和 yaml 同级目录的 .s/build/artifacts/{serviceName}/{functionName}
 
 ## 本地环境
+
+> 不推荐使用，推荐直接使用命令安装依赖
+
+### 使用本地环境
+
+不指定 `--use-*`、`--command`、`--script-file`。
+
+### 对参数影响
+
+不支持任何的参数。
 
 ### 代码输出目录
 

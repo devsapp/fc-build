@@ -109,7 +109,6 @@ export default class Builder {
       let image: string;
       if (useKaniko) {
         image = await this.buildImageWithKaniko(buildInput, dockerFileName, imageName);
-        return { image };
       } else if (useBuildkit) {
         image = await this.buildImageWithBuildkit(buildInput, dockerFileName, imageName);
       } else {
@@ -139,29 +138,22 @@ export default class Builder {
       serviceName,
       functionName,
     };
-    let buildSaveUri;
+    const buildSaveUri = await this.initBuildArtifactDir(initBuildArtifactDirParams);
     if (useKaniko) {
       await removeBuildCache(this.fcCore, baseDir, serviceName, functionName);
       await this.buildArtifact(buildInput, baseDir, resolvedCodeUri, resolvedCodeUri);
-      buildSaveUri = resolvedCodeUri;
     } else if (useBuildkit) {
-      buildSaveUri = await this.initBuildArtifactDir(initBuildArtifactDirParams);
       await this.buildInBuildtkit(buildInput, baseDir, resolvedCodeUri, buildSaveUri, funfilePath);
     } else if (useSandbox || argsPayload.command || argsPayload.scriptFile) {
-      // command 和 scriptFile 使用 sandbox，挂载在 code 目录
-      await removeBuildCache(this.fcCore, baseDir, serviceName, functionName);
       const dockerPayload = { useSandbox, ...argsPayload };
       const opts = await generateSboxOpts(buildInput, dockerPayload, baseDir);
       if (!_.isEmpty(opts)) {
         await startSboxContainer(opts);
       }
-      buildSaveUri = resolvedCodeUri;
     } else if (useDocker || funfilePath) {
-      buildSaveUri = await this.initBuildArtifactDir(initBuildArtifactDirParams);
       await this.buildInDocker(buildInput, baseDir, resolvedCodeUri, buildSaveUri);
       await this.fcCore.buildLink(buildLinkParams, false);
     } else {
-      buildSaveUri = await this.initBuildArtifactDir(initBuildArtifactDirParams);
       await this.buildArtifact(buildInput, baseDir, resolvedCodeUri, buildSaveUri);
       await this.fcCore.buildLink(buildLinkParams, false);
     }
@@ -172,9 +164,9 @@ export default class Builder {
     customContainerConfig: any,
     dockerfile,
   ): {
-    dockerFileName: string;
-    imageName: string;
-  } {
+      dockerFileName: string;
+      imageName: string;
+    } {
     if (_.isEmpty(customContainerConfig?.image)) {
       const errorMessage =
         'function::customContainerConfig::image atttribute value is empty in the configuration file.';
@@ -240,30 +232,6 @@ export default class Builder {
 
     logger.debug(`buildImageWithKaniko execSync:\n${execSyncCmd}`);
     execSync(execSyncCmd, { stdio: 'inherit' });
-
-    // 单独处理下 pip install, 复用 container build image 可能会出现 skip pip install
-    // 临时 hack, 后续考虑删除下面特殊处理
-    const files = fs.readdirSync('/usr/local/lib');
-    files.forEach((name) => {
-      if (name.startsWith('python3')) {
-        const ver = parseFloat(name.substr(8));
-        if (ver > 6) {
-          console.log(`rm -rf /usr/local/lib/${name}/site-packages`);
-          execSync(`rm -rf /usr/local/lib/${name}/site-packages`);
-        }
-      } else if (name.startsWith('python2')) {
-        console.log(`rm -rf /usr/local/lib/${name}/site-packages`);
-        execSync(`rm -rf /usr/local/lib/${name}/site-packages`);
-        execSync(`rm /usr/local/bin/pip${name.substr(6)}`);
-        execSync('rm /usr/local/bin/pip2');
-      }
-    });
-    // reset
-    execSync('rm -rf /usr/local/bin/python3');
-    execSync('ln -s /usr/local/bin/python3.6 /usr/local/bin/python3');
-    execSync('rm -rf /usr/local/bin/python');
-    execSync('ln -s /usr/local/bin/python3 /usr/local/bin/python');
-
     return imageName;
   }
 
@@ -316,11 +284,11 @@ export default class Builder {
     // exec build
     if (Builder.enableBuildkitServer) {
       const execSyncCmd = `buildctl --addr tcp://${buildkitServerAddr}:${Builder.buildkitServerPort
-        } build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(
-          dockerfilePath,
-        )} --opt filename=${path.basename(
-          dockerfilePath,
-        )} --opt target=${targetBuildStage} --output type=local,dest=${baseDir}`;
+      } build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(
+        dockerfilePath,
+      )} --opt filename=${path.basename(
+        dockerfilePath,
+      )} --opt target=${targetBuildStage} --output type=local,dest=${baseDir}`;
 
       logger.debug(`buildInBuildtkit enableBuildkitServer execSyncCmd: ${execSyncCmd}`);
       execSync(execSyncCmd, { stdio: 'inherit' });
@@ -468,6 +436,11 @@ export default class Builder {
   }
 
   async initBuildArtifactDir({ baseDir, serviceName, functionName }: IBuildDir): Promise<string> {
+    // command 和 scriptFile，挂载在 code 目录
+    if (this.useSandbox || this.argsPayload?.command || this.argsPayload?.scriptFile) {
+      await removeBuildCache(this.fcCore, baseDir, serviceName, functionName);
+      return baseDir;
+    }
     const artifactPath = this.fcCore.getBuildArtifactPath(baseDir, serviceName, functionName);
     logger.debug(`[${this.projectName}] Build save url: ${artifactPath}.`);
 
