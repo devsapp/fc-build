@@ -1,4 +1,4 @@
-> 注一：--custom-args、--custom-env、 --command 和 --script-file 这些参数是不支持本地环境，仅仅在 kaniko 和 buildkit 本地环境下才支持
+> custom-container 函数不支持 --custom-args、--custom-env、 --command 和 --script-file 参数。
 
 ## Kaniko
 
@@ -10,8 +10,6 @@
 ### 对参数影响
 
 用户指定的 `--use-sandbox`、`--use-docker`、`--use-buildkit` 均不生效。
-
-<!-- custom-container 函数不支持 --custom-args、--custom-env、 --command 和 --script-file 参数。 -->
 
 其他的 runtime 支持 --custom-args、 --command 和 --script-file 参数。
 
@@ -26,7 +24,6 @@
 
 - Buildkit 的逻辑判断是用户手动指定 --use-buildkit
 - 环境变量 `enableBuildkitServer=1` 和 buildkitServerPort 是数字类型（云效的 Serverless Devs 默认带有环境变量 enableBuildkitServer=1 和 buildkitServerPort=65360）
-  > 如果 custom-container 函数，则根据 dockerfile 使用 buildkit 编译；其他的 runtime 则强制使用本地环境编译。
 
 ### 对参数影响
 
