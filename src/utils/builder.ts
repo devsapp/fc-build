@@ -141,7 +141,7 @@ export default class Builder {
     const buildSaveUri = await this.initBuildArtifactDir(initBuildArtifactDirParams);
     if (useKaniko) {
       await removeBuildCache(this.fcCore, baseDir, serviceName, functionName);
-      await this.buildArtifact(buildInput, baseDir, resolvedCodeUri, resolvedCodeUri);
+      await this.buildArtifact(buildInput, baseDir, resolvedCodeUri, buildSaveUri);
     } else if (useBuildkit) {
       await this.buildInBuildtkit(buildInput, baseDir, resolvedCodeUri, buildSaveUri, funfilePath);
     } else if (useSandbox || argsPayload.command || argsPayload.scriptFile) {
