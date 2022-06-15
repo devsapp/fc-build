@@ -3,7 +3,7 @@
   "version": "0.0.20",
   "main": "./dist/index.js",
   "dependencies": {
-    "@alicloud/fc-builders": "^0.15.3",
+    "@alicloud/fc-builders": "latest",
     "@alicloud/pop-core": "^1.7.10",
     "@serverless-devs/core": "latest",
     "dockerfile-ast": "^0.3.2",

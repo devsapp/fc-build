@@ -13,6 +13,7 @@ import { getFunfile, processFunfileForBuildkit } from './install-file';
 import { generateDockerfileForBuildkit } from './buildkit';
 import { mockDockerConfigFile } from './mock-cr-login';
 import logger from '../common/logger';
+import { sourceActivate } from './constant'; 
 
 interface INeedBuild {
   baseDir: string;
@@ -68,19 +69,19 @@ export default class Builder {
     const { scriptFile, command } = argsPayload;
     const { useKaniko, useBuildkit, useSandbox, useDocker } = useModel;
     if (useKaniko) {
-      logger.log('Use kaniko for building');
+      logger.debug('Use kaniko for building');
       this.useKaniko = useKaniko;
     } else if (useBuildkit) {
-      logger.info('Use buildkit for building');
+      logger.debug('Use buildkit for building');
       this.useBuildkit = true;
     } else if (useSandbox) {
-      logger.info('Use sandbox');
+      logger.debug('Use sandbox');
       this.useSandbox = true;
     } else if (useDocker || scriptFile || command) {
-      logger.info('Use docker for building');
+      logger.debug('Use docker for building');
       this.useDocker = true;
     } else {
-      logger.info('build use model useLocal');
+      logger.debug('build use model useLocal');
     }
   }
 
@@ -369,9 +370,11 @@ export default class Builder {
     funcArtifactDir: string,
   ): Promise<void> {
     const { runtime } = functionProps;
-    const [result, details] = await this.fcCore.checkLanguage(runtime);
-    if (!result && details) {
-      throw new this.fcCore.CatchableError(details);
+    if (!this.useKaniko) {
+      const [result, details] = await this.fcCore.checkLanguage(runtime);
+      if (!result && details) {
+        throw new this.fcCore.CatchableError(details);
+      }
     }
 
     process.env.BUILD_EXCLIUDE_FILES = getExcludeFilesEnv();
@@ -401,6 +404,16 @@ export default class Builder {
       stages,
       this.useKaniko ? this.argsPayload : {},
     );
+
+    if (this.useKaniko && sourceActivate[runtime]) {
+      const { PATH, CONDA_DEFAULT_ENV } = sourceActivate[runtime];
+      process.env.PATH = `${PATH}:${process.env.PATH || '/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'}`;
+      process.env.CONDA_DEFAULT_ENV = CONDA_DEFAULT_ENV;
+      try {
+        const pyVersion = execSync('python -V', { shell: 'bash' });
+        console.log(pyVersion?.toString());
+      } catch(_ex) {/**/}
+    }
     await builder.build();
   }
 
