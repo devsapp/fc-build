@@ -13,7 +13,7 @@ import { getFunfile, processFunfileForBuildkit } from './install-file';
 import { generateDockerfileForBuildkit } from './buildkit';
 import { mockDockerConfigFile } from './mock-cr-login';
 import logger from '../common/logger';
-import { sourceActivate } from './constant'; 
+import { sourceActivate } from './constant';
 
 interface INeedBuild {
   baseDir: string;
@@ -412,7 +412,7 @@ export default class Builder {
       try {
         const pyVersion = execSync('python -V', { shell: 'bash' });
         console.log(pyVersion?.toString());
-      } catch(_ex) {/**/}
+      } catch (_ex) { /**/ }
     }
     await builder.build();
   }

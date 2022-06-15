@@ -29,3 +29,21 @@ export declare const HELP: ({
     content?: undefined;
 })[];
 export declare const FC_BACKEND = "fc-backend";
+export declare const sourceActivate: {
+    'python2.7': {
+        PATH: string;
+        CONDA_DEFAULT_ENV: string;
+    };
+    python3: {
+        PATH: string;
+        CONDA_DEFAULT_ENV: string;
+    };
+    'python3.9': {
+        PATH: string;
+        CONDA_DEFAULT_ENV: string;
+    };
+    custom: {
+        PATH: string;
+        CONDA_DEFAULT_ENV: string;
+    };
+};

@@ -60,7 +60,7 @@ export const sourceActivate = {
     PATH: '/usr/local/envs/py27/bin',
     CONDA_DEFAULT_ENV: 'py27',
   },
-  'python3': {
+  python3: {
     PATH: '/usr/local/envs/py36/bin',
     CONDA_DEFAULT_ENV: 'py36',
   },
@@ -68,8 +68,8 @@ export const sourceActivate = {
     PATH: '/usr/local/envs/py39/bin',
     CONDA_DEFAULT_ENV: 'py39',
   },
-  'custom': {
+  custom: {
     PATH: '/usr/local/envs/py37/bin',
     CONDA_DEFAULT_ENV: 'py37',
   },
-}
+};
