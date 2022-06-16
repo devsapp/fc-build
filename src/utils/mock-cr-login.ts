@@ -58,9 +58,7 @@ async function getAuthorizationTokenOfRegisrty(region, credentials): Promise<any
     response = await getAuthorizationToken(region, credentials);
   } catch (e) {
     if (
-      e.statusCode === 404 &&
-      e.result?.message === 'user is not exist.' &&
-      e.result?.code === 'USER_NOT_EXIST'
+      e.statusCode === 401 || e.statusCode === 404 || e.result?.message === 'user is not exist.' || e.result?.code === 'USER_NOT_EXIST'
     ) {
       // 子账号第一次需要先设置 Regisrty 的登陆密码后才能获取登录 Registry 的临时账号和临时密码
       // acr 密码要求: 8-32位，必须包含字母、符号或数字中的至少两项
