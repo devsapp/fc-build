@@ -227,11 +227,13 @@ export default class Builder {
     logger.info('start to build image ...');
     await mockDockerConfigFile(buildInput.region, imageName, buildInput.credentials);
 
-    const execSyncCmd = `executor --force=true --cache=false --use-new-run=true --dockerfile ${dockerFileName} --context ${path.dirname(
-      dockerFileName,
-    )} --destination ${imageName}`;
+    const cpCmd = `cp -r ${path.dirname(dockerFileName)} /kaniko/tmpWorkDir`;
+    execSync(cpCmd, { stdio: 'inherit' });
+    const newDockerFileName = path.join('/kaniko/tmpWorkDir', path.basename(dockerFileName));
 
-    logger.debug(`buildImageWithKaniko execSync:\n${execSyncCmd}`);
+    const execSyncCmd = `executor --force=true --cache=false --use-new-run=true --dockerfile ${newDockerFileName} --context /kaniko/tmpWorkDir --destination ${imageName}`;
+
+    logger.info(`buildImageWithKaniko execSync:\n${execSyncCmd}`);
     execSync(execSyncCmd, { stdio: 'inherit' });
     return imageName;
   }
