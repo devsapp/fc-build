@@ -70,7 +70,7 @@ async function getAuthorizationTokenOfRegisrty(region, credentials): Promise<any
       await createUserInfo(region, credentials, pwd);
       response = await getAuthorizationToken(region, credentials);
     } else {
-      logger.debug('getAuthorizationToken error');
+      logger.error(`getAuthorizationToken error ${e}`);
       throw e;
     }
   }
