@@ -36,7 +36,7 @@ interface IArgsPayload {
 
 interface IUseModel {
   useSandbox: boolean;
-  useKaniko: boolean;
+  useFcBackend: boolean;
   useBuildkit: boolean;
   useDocker: boolean;
 }
@@ -52,7 +52,7 @@ export default class Builder {
   private readonly argsPayload: IArgsPayload;
 
   private readonly useBuildkit: boolean;
-  private readonly useKaniko: boolean;
+  private readonly useFcBackend: boolean;
   private readonly useSandbox: boolean;
   private readonly useDocker: boolean;
 
@@ -68,10 +68,10 @@ export default class Builder {
     this.configDirPath = configDirPath;
     this.argsPayload = argsPayload;
     const { scriptFile, command } = argsPayload;
-    const { useKaniko, useBuildkit, useSandbox, useDocker } = useModel;
-    if (useKaniko) {
+    const { useFcBackend, useBuildkit, useSandbox, useDocker } = useModel;
+    if (useFcBackend) {
       logger.debug('Use kaniko for building');
-      this.useKaniko = useKaniko;
+      this.useFcBackend = useFcBackend;
     } else if (useBuildkit) {
       logger.debug('Use buildkit for building');
       this.useBuildkit = true;
@@ -89,7 +89,7 @@ export default class Builder {
   async build(buildInput: IBuildInput): Promise<IBuildOutput> {
     const {
       useSandbox,
-      useKaniko,
+      useFcBackend,
       useDocker,
       useBuildkit,
       configDirPath: baseDir,
@@ -109,7 +109,7 @@ export default class Builder {
         dockerfile,
       );
       let image: string;
-      if (useKaniko) {
+      if (useFcBackend) {
         image = await this.buildImageWithKaniko(buildInput, dockerFileName, imageName);
       } else if (useBuildkit) {
         image = await this.buildImageWithBuildkit(buildInput, dockerFileName, imageName);
@@ -141,7 +141,7 @@ export default class Builder {
       functionName,
     };
     const buildSaveUri = await this.initBuildArtifactDir(initBuildArtifactDirParams);
-    if (useKaniko) {
+    if (useFcBackend) {
       await removeBuildCache(this.fcCore, baseDir, serviceName, functionName);
       await this.buildArtifact(buildInput, baseDir, resolvedCodeUri, buildSaveUri);
     } else if (useBuildkit) {
@@ -371,7 +371,7 @@ export default class Builder {
     funcArtifactDir: string,
   ): Promise<void> {
     const { runtime } = functionProps;
-    if (!this.useKaniko) {
+    if (!this.useFcBackend) {
       const [result, details] = await this.fcCore.checkLanguage(runtime);
       if (!result && details) {
         throw new this.fcCore.CatchableError(details);
@@ -403,10 +403,10 @@ export default class Builder {
       funcArtifactDir,
       verbose,
       stages,
-      this.useKaniko ? this.argsPayload : {},
+      this.useFcBackend ? this.argsPayload : {},
     );
 
-    if (this.useKaniko) {
+    if (this.useFcBackend) {
       if (sourceActivate[runtime]) {
         const { PATH, CONDA_DEFAULT_ENV } = sourceActivate[runtime];
         process.env.PATH = `${PATH}:${process.env.PATH || '/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'}`;
