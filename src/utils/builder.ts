@@ -4,8 +4,9 @@ import path from 'path';
 import rimraf from 'rimraf';
 import { lodash as _ } from '@serverless-devs/core';
 import fcBuilders from '@alicloud/fc-builders';
+import AptInstall from '@alicloud/fc-builders/lib/commands/apt-get';
 import { execSync } from 'child_process';
-import { checkCodeUri, getExcludeFilesEnv, removeBuildCache, buildkitServerAddr } from './utils';
+import { checkCodeUri, getExcludeFilesEnv, removeBuildCache, buildkitServerAddr, readLines } from './utils';
 import { generateBuildContainerBuildOpts, generateSboxOpts } from './build-opts';
 import { dockerRun, resolvePasswdMount, startSboxContainer } from './docker';
 import { IBuildInput, ICodeUri, IBuildDir } from '../interface';
@@ -405,15 +406,27 @@ export default class Builder {
       this.useKaniko ? this.argsPayload : {},
     );
 
-    if (this.useKaniko && sourceActivate[runtime]) {
-      const { PATH, CONDA_DEFAULT_ENV } = sourceActivate[runtime];
-      process.env.PATH = `${PATH}:${process.env.PATH || '/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'}`;
-      process.env.CONDA_DEFAULT_ENV = CONDA_DEFAULT_ENV;
-      try {
-        const pyVersion = execSync('python -V', { shell: 'bash' });
-        console.log(pyVersion?.toString());
-      } catch (_ex) { /**/ }
+    if (this.useKaniko) {
+      if (sourceActivate[runtime]) {
+        const { PATH, CONDA_DEFAULT_ENV } = sourceActivate[runtime];
+        process.env.PATH = `${PATH}:${process.env.PATH || '/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'}`;
+        process.env.CONDA_DEFAULT_ENV = CONDA_DEFAULT_ENV;
+        try {
+          const pyVersion = execSync('python -V', { shell: 'bash' });
+          console.log(pyVersion?.toString());
+        } catch (_ex) { /**/ }
+      }
+
+      const aptListFilePath = path.join(codeUri, 'apt-get.list');
+      if ((await fs.stat(aptListFilePath)).isFile()) {
+        for (const line of await readLines(aptListFilePath)) {
+          if (line && !line.startsWith('#')) {
+            await AptInstall([line], { target: `${funcArtifactDir}/.s/root` });
+          }
+        }
+      }
     }
+
     await builder.build();
   }
 
