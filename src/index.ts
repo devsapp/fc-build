@@ -97,9 +97,9 @@ export default class Build {
     const fcCore = await loadComponent('devsapp/fc-core');
 
     const builder = new Builder(projectName, configDirPath, fcCore, useModel, argsPayload);
-    await fcCore.setBuildState(serviceName, functionName, '', { status: 'unavailable' }); // 设置 build 开始状态
+    await fcCore.setBuildState(serviceName, functionName, configDirPath, { status: 'unavailable' }); // 设置 build 开始状态
     const buildOutput = await builder.build(params); // 开始build
-    await fcCore.setBuildState(serviceName, functionName, '', { status: 'available' }); // 设置 build 结束状态
+    await fcCore.setBuildState(serviceName, functionName, configDirPath, { status: 'available' }); // 设置 build 结束状态
 
     logger.debug(`[${projectName}] Build output: ${JSON.stringify(buildOutput)}`);
 
