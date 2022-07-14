@@ -4,8 +4,9 @@ import path from 'path';
 import rimraf from 'rimraf';
 import { lodash as _ } from '@serverless-devs/core';
 import fcBuilders from '@alicloud/fc-builders';
+import AptInstall from '@alicloud/fc-builders/lib/commands/apt-get';
 import { execSync } from 'child_process';
-import { checkCodeUri, getExcludeFilesEnv, removeBuildCache, buildkitServerAddr } from './utils';
+import { checkCodeUri, getExcludeFilesEnv, removeBuildCache, buildkitServerAddr, readLines } from './utils';
 import { generateBuildContainerBuildOpts, generateSboxOpts } from './build-opts';
 import { dockerRun, resolvePasswdMount, startSboxContainer } from './docker';
 import { IBuildInput, ICodeUri, IBuildDir } from '../interface';
@@ -35,7 +36,7 @@ interface IArgsPayload {
 
 interface IUseModel {
   useSandbox: boolean;
-  useKaniko: boolean;
+  useFcBackend: boolean;
   useBuildkit: boolean;
   useDocker: boolean;
 }
@@ -51,7 +52,7 @@ export default class Builder {
   private readonly argsPayload: IArgsPayload;
 
   private readonly useBuildkit: boolean;
-  private readonly useKaniko: boolean;
+  private readonly useFcBackend: boolean;
   private readonly useSandbox: boolean;
   private readonly useDocker: boolean;
 
@@ -67,10 +68,10 @@ export default class Builder {
     this.configDirPath = configDirPath;
     this.argsPayload = argsPayload;
     const { scriptFile, command } = argsPayload;
-    const { useKaniko, useBuildkit, useSandbox, useDocker } = useModel;
-    if (useKaniko) {
+    const { useFcBackend, useBuildkit, useSandbox, useDocker } = useModel;
+    if (useFcBackend) {
       logger.debug('Use kaniko for building');
-      this.useKaniko = useKaniko;
+      this.useFcBackend = useFcBackend;
     } else if (useBuildkit) {
       logger.debug('Use buildkit for building');
       this.useBuildkit = true;
@@ -88,7 +89,7 @@ export default class Builder {
   async build(buildInput: IBuildInput): Promise<IBuildOutput> {
     const {
       useSandbox,
-      useKaniko,
+      useFcBackend,
       useDocker,
       useBuildkit,
       configDirPath: baseDir,
@@ -108,7 +109,7 @@ export default class Builder {
         dockerfile,
       );
       let image: string;
-      if (useKaniko) {
+      if (useFcBackend) {
         image = await this.buildImageWithKaniko(buildInput, dockerFileName, imageName);
       } else if (useBuildkit) {
         image = await this.buildImageWithBuildkit(buildInput, dockerFileName, imageName);
@@ -140,7 +141,7 @@ export default class Builder {
       functionName,
     };
     const buildSaveUri = await this.initBuildArtifactDir(initBuildArtifactDirParams);
-    if (useKaniko) {
+    if (useFcBackend) {
       await removeBuildCache(this.fcCore, baseDir, serviceName, functionName);
       await this.buildArtifact(buildInput, baseDir, resolvedCodeUri, buildSaveUri);
     } else if (useBuildkit) {
@@ -370,7 +371,7 @@ export default class Builder {
     funcArtifactDir: string,
   ): Promise<void> {
     const { runtime } = functionProps;
-    if (!this.useKaniko) {
+    if (!this.useFcBackend) {
       const [result, details] = await this.fcCore.checkLanguage(runtime);
       if (!result && details) {
         throw new this.fcCore.CatchableError(details);
@@ -402,18 +403,30 @@ export default class Builder {
       funcArtifactDir,
       verbose,
       stages,
-      this.useKaniko ? this.argsPayload : {},
+      this.useFcBackend ? this.argsPayload : {},
     );
 
-    if (this.useKaniko && sourceActivate[runtime]) {
-      const { PATH, CONDA_DEFAULT_ENV } = sourceActivate[runtime];
-      process.env.PATH = `${PATH}:${process.env.PATH || '/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'}`;
-      process.env.CONDA_DEFAULT_ENV = CONDA_DEFAULT_ENV;
-      try {
-        const pyVersion = execSync('python -V', { shell: 'bash' });
-        console.log(pyVersion?.toString());
-      } catch (_ex) { /**/ }
+    if (this.useFcBackend) {
+      if (sourceActivate[runtime]) {
+        const { PATH, CONDA_DEFAULT_ENV } = sourceActivate[runtime];
+        process.env.PATH = `${PATH}:${process.env.PATH || '/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'}`;
+        process.env.CONDA_DEFAULT_ENV = CONDA_DEFAULT_ENV;
+        try {
+          const pyVersion = execSync('python -V', { shell: 'bash' });
+          console.log(pyVersion?.toString());
+        } catch (_ex) { /**/ }
+      }
+
+      const aptListFilePath = path.join(codeUri, 'apt-get.list');
+      if ((await fs.stat(aptListFilePath)).isFile()) {
+        for (const line of await readLines(aptListFilePath)) {
+          if (line && !line.startsWith('#')) {
+            await AptInstall([line], { target: `${funcArtifactDir}/.s/root` });
+          }
+        }
+      }
     }
+
     await builder.build();
   }
 

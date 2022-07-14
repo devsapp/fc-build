@@ -10,7 +10,7 @@ import Builder from './utils/builder';
 import { IInputs, IBuildInput } from './interface';
 import { HELP } from './utils/constant';
 import logger from './common/logger';
-import { compelUseBuildkit, useKaniko } from './utils/utils';
+import { compelUseBuildkit, useFcBackend } from './utils/utils';
 import commandParse from './commandParse';
 
 interface IOutput {
@@ -77,15 +77,15 @@ export default class Build {
       },
     };
     const buildkit = useBuildkit || compelUseBuildkit; // 使用 use-buildkit
-    if (buildkit || useKaniko) {
-      logger.debug(`credentials becase useBuildkit=${buildkit} or useKaniko=${useKaniko}`);
+    if (buildkit || useFcBackend) {
+      logger.debug(`credentials becase useBuildkit=${buildkit} or useFcBackend=${useFcBackend}`);
       params.credentials = _.isEmpty(inputs.credentials)
         ? inputs.credentials
         : await getCredential(inputs.project?.access);
     }
 
     // 构建 Build 入参
-    const useModel = { useSandbox, useKaniko, useBuildkit: buildkit, useDocker };
+    const useModel = { useSandbox, useFcBackend, useBuildkit: buildkit, useDocker };
     const argsPayload = {
       customEnv: customEnv ? JSON.parse(customEnv) : undefined,
       additionalArgs: customArgs ? customArgs.split(' ') : [],
