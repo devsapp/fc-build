@@ -1,6 +1,6 @@
 import { ICodeUri, IObject } from '../interface';
 export declare const isDebug: any;
-export declare const useKaniko: boolean;
+export declare const useFcBackend: boolean;
 export declare const compelUseBuildkit: boolean;
 export declare const buildkitServerAddr: string;
 export declare function sleep(ms: number): Promise<unknown>;

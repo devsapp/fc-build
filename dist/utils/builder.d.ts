@@ -16,7 +16,7 @@ interface IArgsPayload {
 }
 interface IUseModel {
     useSandbox: boolean;
-    useKaniko: boolean;
+    useFcBackend: boolean;
     useBuildkit: boolean;
     useDocker: boolean;
 }
@@ -29,7 +29,7 @@ export default class Builder {
     private readonly configDirPath;
     private readonly argsPayload;
     private readonly useBuildkit;
-    private readonly useKaniko;
+    private readonly useFcBackend;
     private readonly useSandbox;
     private readonly useDocker;
     constructor(projectName: string, configDirPath: string, fcCore: any, useModel: IUseModel, argsPayload?: IArgsPayload);
