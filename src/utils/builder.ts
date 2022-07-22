@@ -418,7 +418,7 @@ export default class Builder {
       }
 
       const aptListFilePath = path.join(codeUri, 'apt-get.list');
-      if ((await fs.stat(aptListFilePath)).isFile()) {
+      if (fs.pathExistsSync(aptListFilePath)) {
         for (const line of await readLines(aptListFilePath)) {
           if (line && !line.startsWith('#')) {
             await AptInstall([line], { target: `${funcArtifactDir}/.s/root` });
