@@ -127,3 +127,21 @@ export async function removeBuildCache(fcCore, baseDir, serviceName, functionNam
     /** 如果异常不阻塞主进程运行 */
   }
 }
+
+export function isAcreeRegistry(imageUrl: string): boolean { // 容器镜像企业服务
+  const registry = _.split(imageUrl, '/')[0];
+  return registry.includes('registry') && registry.endsWith('cr.aliyuncs.com');
+}
+
+export function isVpcAcrRegistry(imageUrl: string) {
+  const imageArr = imageUrl.split('/');
+  return imageArr[0].includes('registry-vpc');
+}
+
+export function vpcImageToInternetImage(region: string, imageUrl: string): string {
+  const imageArr = imageUrl.split('/');
+  if (isVpcAcrRegistry(imageUrl)) {
+    imageArr[0] = _.replace(imageArr[0], `registry-vpc.${region}`, `registry.${region}`);
+  }
+  return imageArr.join('/');
+}

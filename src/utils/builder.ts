@@ -6,7 +6,7 @@ import { lodash as _ } from '@serverless-devs/core';
 import fcBuilders from '@alicloud/fc-builders';
 import AptInstall from '@alicloud/fc-builders/lib/commands/apt-get';
 import { execSync } from 'child_process';
-import { checkCodeUri, getExcludeFilesEnv, removeBuildCache, buildkitServerAddr, readLines } from './utils';
+import { checkCodeUri, getExcludeFilesEnv, removeBuildCache, buildkitServerAddr, readLines, isAcreeRegistry, isVpcAcrRegistry, vpcImageToInternetImage } from './utils';
 import { generateBuildContainerBuildOpts, generateSboxOpts } from './build-opts';
 import { dockerRun, resolvePasswdMount, startSboxContainer } from './docker';
 import { IBuildInput, ICodeUri, IBuildDir } from '../interface';
@@ -165,11 +165,10 @@ export default class Builder {
   private checkCustomContainerConfig(
     customContainerConfig: any,
     dockerfile,
-  ): {
-      dockerFileName: string;
-      imageName: string;
-    } {
-    if (_.isEmpty(customContainerConfig?.image)) {
+  ): { dockerFileName: string; imageName: string; } {
+    
+    const { image } = customContainerConfig || {};
+    if (_.isEmpty(image)) {
       const errorMessage =
         'function::customContainerConfig::image atttribute value is empty in the configuration file.';
       throw new this.fcCore.CatchableError(errorMessage);
@@ -184,8 +183,15 @@ export default class Builder {
 
     return {
       dockerFileName,
-      imageName: customContainerConfig.image,
+      imageName: image,
     };
+  }
+
+  private checkAcreeInstanceID(imageName: string, instanceID) {
+    // 如果是企业镜像，并且非正常 build 验证，企业镜像配置
+    if (isAcreeRegistry(imageName) && !instanceID) {
+      throw new this.fcCore.CatchableError('When an enterprise version instance is selected for the container image, you need to add an instanceID to the enterprise version of the container image service. Refer to: https://docs.serverless-devs.com/fc/yaml/function#customcontainerconfig');
+    }
   }
 
   private async buildImageWithBuildkit(
@@ -198,7 +204,10 @@ export default class Builder {
     logger.debug(`buildkitServerAddr: ${buildkitServerAddr}`);
     logger.debug(`buildkitServerPort: ${buildkitServerPort}`);
     if (enableBuildkitServer) {
-      await mockDockerConfigFile(buildInput.region, imageName, buildInput.credentials);
+      const instanceID = _.get(buildInput, 'functionProps.customContainerConfig.instanceID');
+      logger.info(`instanceID: ${instanceID}`);
+      this.checkAcreeInstanceID(imageName, instanceID);
+      await mockDockerConfigFile(buildInput.region, imageName, buildInput.credentials, instanceID);
       const execSyncCmd = `buildctl --addr tcp://${buildkitServerAddr}:${buildkitServerPort} build --no-cache \
       --frontend dockerfile.v0 \
       --local context=${path.dirname(dockerFileName)} \
@@ -226,11 +235,16 @@ export default class Builder {
     imageName: string,
   ): Promise<string> {
     logger.info('start to build image ...');
-    await mockDockerConfigFile(buildInput.region, imageName, buildInput.credentials);
+
+    const instanceID = _.get(buildInput, 'functionProps.customContainerConfig.instanceID');
+    logger.info(`instanceID: ${instanceID}`);
+    this.checkAcreeInstanceID(imageName, instanceID);
+    let internetImage = isVpcAcrRegistry(imageName) ? vpcImageToInternetImage(buildInput.region, imageName) : imageName;
+    await mockDockerConfigFile(buildInput.region, internetImage, buildInput.credentials, instanceID);
 
     const execSyncCmd = `executor --force=true --cache=false --use-new-run=true --dockerfile ${dockerFileName} --context ${path.dirname(
       dockerFileName,
-    )} --destination ${imageName}`;
+    )} --destination ${internetImage}`;
 
     logger.info(`buildImageWithKaniko execSync:\n${execSyncCmd}`);
     execSync(execSyncCmd, { stdio: 'inherit' });
