@@ -9,3 +9,6 @@ export declare function checkCodeUri(codeUri: string | ICodeUri): string;
 export declare function readLines(fileName: string): Promise<string[]>;
 export declare function resolveLibPathsFromLdConf(baseDir: string, codeUri: string): Promise<IObject>;
 export declare function removeBuildCache(fcCore: any, baseDir: any, serviceName: any, functionName: any): Promise<void>;
+export declare function isAcreeRegistry(imageUrl: string): boolean;
+export declare function isVpcAcrRegistry(imageUrl: string): boolean;
+export declare function vpcImageToInternetImage(region: string, imageUrl: string): string;

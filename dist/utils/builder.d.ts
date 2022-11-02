@@ -35,6 +35,7 @@ export default class Builder {
     constructor(projectName: string, configDirPath: string, fcCore: any, useModel: IUseModel, argsPayload?: IArgsPayload);
     build(buildInput: IBuildInput): Promise<IBuildOutput>;
     private checkCustomContainerConfig;
+    private checkAcreeInstanceID;
     private buildImageWithBuildkit;
     private buildImageWithKaniko;
     buildImage(dockerFileName: string, imageName: string): Promise<string>;
