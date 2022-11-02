@@ -65,12 +65,15 @@ export interface IFunctionProps {
   environmentVariables?: {
     [key: string]: any;
   };
-  customContainerConfig?: {
-    image: string;
-    command?: string;
-    args?: string;
-  };
+  customContainerConfig?: ICustomContainerConfig;
 }
+
+export interface ICustomContainerConfig {
+  image: string;
+  instanceID?: string;
+  command?: string;
+  args?: string;
+};
 
 export interface ICodeUri {
   src?: string;

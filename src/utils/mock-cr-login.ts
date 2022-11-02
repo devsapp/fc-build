@@ -3,8 +3,11 @@ import { logger } from '@serverless-devs/core/dist/logger';
 import * as os from 'os';
 import path from 'path';
 import random from 'string-random';
+import Pop from '@alicloud/pop-core';
 
 const { ROAClient } = require('@alicloud/pop-core');
+
+interface IDockerTmpConfig { dockerTmpUser: string; dockerTmpToken: string; }
 
 function getAcrClient(region, credentials) {
   const acrClient = new ROAClient({
@@ -15,6 +18,16 @@ function getAcrClient(region, credentials) {
     apiVersion: '2016-06-07',
   });
   return acrClient;
+}
+async function getPopClient(credentials, endpoint: string, apiVersion: string): Promise<Pop> {
+  return new Pop({
+    endpoint,
+    apiVersion,
+    accessKeyId: credentials?.AccessKeyID,
+    accessKeySecret: credentials?.AccessKeySecret,
+    // @ts-ignore
+    securityToken: credentials?.SecurityToken,
+  });
 }
 
 async function getAuthorizationToken(region, credentials): Promise<any> {
@@ -52,7 +65,7 @@ async function createUserInfo(region, credentials, pwd: string): Promise<any> {
   await acrClient.request(httpMethod, uriPath, queries, body, headers, requestOption);
 }
 
-async function getAuthorizationTokenOfRegisrty(region, credentials): Promise<any> {
+async function getAuthorizationTokenOfRegisrty(region, credentials): Promise<IDockerTmpConfig> {
   let response;
   try {
     response = await getAuthorizationToken(region, credentials);
@@ -73,6 +86,21 @@ async function getAuthorizationTokenOfRegisrty(region, credentials): Promise<any
     }
   }
   return response;
+}
+
+async function getAuthorizationTokenForAcrEE(region, credentials, instanceID: string): Promise<IDockerTmpConfig> {
+  const client = await getPopClient(credentials, `https://cr.${region}.aliyuncs.com`, '2018-12-01');
+  const requestOption = {
+    method: 'POST',
+    formatParams: false,
+  };
+
+  const result: any = await client.request('GetAuthorizationToken', { InstanceId: instanceID }, requestOption);
+  // logger.debug(`GetAuthorizationToken result: ${JSON.stringify(result)}`);
+  return {
+    dockerTmpUser: result.TempUsername,
+    dockerTmpToken: result.AuthorizationToken,
+  };
 }
 
 
@@ -114,13 +142,20 @@ async function setDockerConfigInformation(dockerConfigPath, fileContent, image, 
   await fse.outputFile(dockerConfigPath, JSON.stringify(fileContent, null, 2));
 }
 
-export async function mockDockerConfigFile(region, imageName, credentials) {
+export async function mockDockerConfigFile(region, imageName, credentials, instanceID: string) {
   const {
     fileContent,
     dockerConfigPath,
   } = await getDockerConfigInformation();
-  const { dockerTmpUser, dockerTmpToken } = await getAuthorizationTokenOfRegisrty(region, credentials);
-  const auth = Buffer.from(`${dockerTmpUser}:${dockerTmpToken}`).toString('base64');
+  let dockerTmpConfig: IDockerTmpConfig;
+
+  if (instanceID) {
+    dockerTmpConfig = await getAuthorizationTokenForAcrEE(region, credentials, instanceID);
+  } else {
+    dockerTmpConfig = await getAuthorizationTokenOfRegisrty(region, credentials);
+  }
+
+  const auth = Buffer.from(`${dockerTmpConfig.dockerTmpUser}:${dockerTmpConfig.dockerTmpToken}`).toString('base64');
 
   await setDockerConfigInformation(dockerConfigPath, fileContent, imageName.split('/')[0], auth);
 }
