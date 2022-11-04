@@ -45,7 +45,7 @@ async function createContainer(opts): Promise<any> {
     if (opts.HostConfig) {
       const pathsOutofSharedPaths = await findPathsOutofSharedPaths(opts.HostConfig.Mounts);
       if (isMac && pathsOutofSharedPaths.length > 0) {
-        const errorMessage = `Please add directory '${pathsOutofSharedPaths}' to Docker File sharing list, more information please refer to https://github.com/alibaba/funcraft/blob/master/docs/usage/faq-zh.md`;
+        const errorMessage = `Please add directory '${pathsOutofSharedPaths}' to Docker File sharing list, more information please refer to https://github.com/devsapp/fc/issues/867 `;
         throw new Error(errorMessage);
       }
     }
@@ -59,7 +59,7 @@ async function createContainer(opts): Promise<any> {
   } catch (ex) {
     if (ex.message.indexOf('invalid mount config for type') !== -1 && dockerToolBox) {
       const errorMessage =
-        "The default host machine path for docker toolbox is under 'C:\\Users', Please make sure your project is in this directory. If you want to mount other disk paths, please refer to https://github.com/alibaba/funcraft/blob/master/docs/usage/faq-zh.md.";
+        "The default host machine path for docker toolbox is under 'C:\\Users', Please make sure your project is in this directory. If you want to mount other disk paths, please refer to https://github.com/devsapp/fc/issues/867 ";
       throw new Error(errorMessage);
     }
     if (ex.message.indexOf('drive is not shared') !== -1 && isWin) {
