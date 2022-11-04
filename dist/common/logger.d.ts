@@ -1,3 +1,2 @@
-import { Logger } from '@serverless-devs/core';
-declare const logger: Logger;
+declare const logger: any;
 export default logger;

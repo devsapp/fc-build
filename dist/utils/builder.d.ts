@@ -23,7 +23,7 @@ interface IUseModel {
 export default class Builder {
     static readonly stages: string[];
     static readonly buildkitServerPort: number;
-    static readonly enableBuildkitServer: boolean;
+    static readonly enableBuildkitServer: any;
     private readonly fcCore;
     private readonly projectName;
     private readonly configDirPath;

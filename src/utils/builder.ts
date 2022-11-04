@@ -165,8 +165,7 @@ export default class Builder {
   private checkCustomContainerConfig(
     customContainerConfig: any,
     dockerfile,
-  ): { dockerFileName: string; imageName: string; } {
-    
+  ): { dockerFileName: string; imageName: string } {
     const { image } = customContainerConfig || {};
     if (_.isEmpty(image)) {
       const errorMessage =
@@ -239,7 +238,7 @@ export default class Builder {
     const instanceID = _.get(buildInput, 'functionProps.customContainerConfig.instanceID');
     logger.info(`instanceID: ${instanceID}`);
     this.checkAcreeInstanceID(imageName, instanceID);
-    let internetImage = isVpcAcrRegistry(imageName) ? vpcImageToInternetImage(buildInput.region, imageName) : imageName;
+    const internetImage = isVpcAcrRegistry(imageName) ? vpcImageToInternetImage(buildInput.region, imageName) : imageName;
     await mockDockerConfigFile(buildInput.region, internetImage, buildInput.credentials, instanceID);
 
     const execSyncCmd = `executor --force=true --cache=false --use-new-run=true --dockerfile ${dockerFileName} --context ${path.dirname(

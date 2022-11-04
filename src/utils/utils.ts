@@ -31,7 +31,7 @@ export function checkCodeUri(codeUri: string | ICodeUri): string {
     return '';
   }
 
-  const src = _.isString(codeUri) ? codeUri : codeUri.src;
+  const src: string = _.isString(codeUri) ? codeUri as string : (codeUri as ICodeUri).src;
 
   if (!src) {
     logger.info('No Src configured, skip building.');

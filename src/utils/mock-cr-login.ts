@@ -1,13 +1,13 @@
 import { fse, lodash } from '@serverless-devs/core';
-import { logger } from '@serverless-devs/core/dist/logger';
 import * as os from 'os';
 import path from 'path';
 import random from 'string-random';
 import Pop from '@alicloud/pop-core';
+import logger from '../common/logger';
 
 const { ROAClient } = require('@alicloud/pop-core');
 
-interface IDockerTmpConfig { dockerTmpUser: string; dockerTmpToken: string; }
+interface IDockerTmpConfig { dockerTmpUser: string; dockerTmpToken: string }
 
 function getAcrClient(region, credentials) {
   const acrClient = new ROAClient({

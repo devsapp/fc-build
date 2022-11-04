@@ -73,7 +73,7 @@ export interface ICustomContainerConfig {
   instanceID?: string;
   command?: string;
   args?: string;
-};
+}
 
 export interface ICodeUri {
   src?: string;

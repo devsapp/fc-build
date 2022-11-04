@@ -37,11 +37,11 @@ export declare function generateSboxOpts(payload: IBuildInput, dockerPayload: an
     Tty: boolean;
     OpenStdin: any;
     StdinOnce: boolean;
-    Env: string[];
+    Env: any;
     Cmd: string[];
     HostConfig: {
         AutoRemove: boolean;
-        Mounts: any[];
+        Mounts: any;
     };
 }>;
 export {};
