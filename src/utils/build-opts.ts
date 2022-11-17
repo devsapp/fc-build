@@ -148,10 +148,10 @@ export async function generateSboxOpts(payload: IBuildInput, dockerPayload, base
   }
 
   logger.debug(`runtime: ${runtime}`);
-  logger.debug(`mounts: ${mounts}`);
+  logger.debug(`mounts: ${JSON.stringify(mounts, null, 2)}`);
   logger.debug(`isTty: ${isTty}`);
   logger.debug(`isInteractive: ${useSandbox}`);
-  logger.debug(`isInteractive: ${cmd}`);
+  logger.debug(`cmd: ${cmd}`);
 
   return {
     Image: imageName,
