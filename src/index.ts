@@ -10,7 +10,7 @@ import Builder from './utils/builder';
 import { IInputs, IBuildInput } from './interface';
 import { HELP } from './utils/constant';
 import logger from './common/logger';
-import { compelUseBuildkit, useFcBackend } from './utils/utils';
+import { compelUseBuildkit, shellEscapeStrict, useFcBackend } from './utils/utils';
 import commandParse from './commandParse';
 
 interface IOutput {
@@ -57,6 +57,15 @@ export default class Build {
 
     if (!runtime) {
       throw new CatchableError('Parameter function.runtime is required');
+    }
+    if (runtime === 'custom-container') {
+      const image = _.get(functionProps, 'customContainerConfig.image');
+      const translatedImage = shellEscapeStrict(image);
+      if (translatedImage !== image) {
+        const errorMessage = 'It is detected that the customContainerConfig image contains special characters. Please check your configuration';
+        const tip = 'Only support container image warehouse address.\nPlease go to https://cr.console.aliyun.com/ View and obtain the image address';
+        throw new CatchableError(errorMessage, tip);
+      }
     }
 
     const serviceName = serviceProps.name;

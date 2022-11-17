@@ -145,3 +145,20 @@ export function vpcImageToInternetImage(region: string, imageUrl: string): strin
   }
   return imageArr.join('/');
 }
+
+export function shellEscapeStrict(image: string): string {
+  if(!_.isString(image)) {
+    return image;
+  }
+
+  const char_code_list = [];
+  const unsafe_char_code_list = [35,38,59,96,124,42,63,126,60,62,94,40,41,91,93,123,125,36,39,34,10,255];
+  for(let i = 0; i < image.length; i++){
+    const char_code = image.charCodeAt(i)
+    // 排除换行符号 ，; 号, 行结束符号, | 号杜绝 命令连接写法
+    if(!unsafe_char_code_list.includes(char_code)){
+      char_code_list.push(char_code);
+    }
+  }
+  return String.fromCharCode(...char_code_list);
+}
