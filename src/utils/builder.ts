@@ -173,12 +173,6 @@ export default class Builder {
       throw new this.fcCore.CatchableError(errorMessage);
     }
 
-    if (!(_.includes(image, 'registry') && _.includes(image, '.aliyuncs.com'))) {
-      const errorMessage = 'Only support container image warehouse address.';
-      const tip = 'Please go to https://cr.console.aliyun.com/ View and obtain the image address';
-      throw new this.fcCore.CatchableError(errorMessage, tip);
-    }
-
     const dockerFileName = path.resolve(dockerfile || 'Dockerfile');
     if (!fs.existsSync(dockerFileName)) {
       const msg =
