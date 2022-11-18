@@ -12,3 +12,4 @@ export declare function removeBuildCache(fcCore: any, baseDir: any, serviceName:
 export declare function isAcreeRegistry(imageUrl: string): boolean;
 export declare function isVpcAcrRegistry(imageUrl: string): boolean;
 export declare function vpcImageToInternetImage(region: string, imageUrl: string): string;
+export declare function shellEscapeStrict(image: string): string;
