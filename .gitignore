@@ -17,6 +17,5 @@ lib
 */src
 !fc/src
 !s-zip/src
-package-lock.json
 .s
 examples/java/target/

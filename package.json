@@ -31,14 +31,14 @@
     "rimraf": "^3.0.2",
     "ts-jest": "^26.2.0",
     "ts-loader": "^8.0.14",
-    "typescript": "^3.9.7"
+    "typescript": "^4.4.3"
   },
   "scripts": {
     "preln": "rm -rf ~/.s/components/devsapp.cn/devsapp/fc-build/dist",
     "ln": "ln -s $(pwd)/dist ~/.s/components/devsapp.cn/devsapp/fc-build/dist",
     "start": "npm run prebuild && npm run watch",
     "watch": "npx tsc -w -p tsconfig.json",
-    "prebuild": "rm -rf node_modules && rm -rf package-lock.json && npm i && rimraf dist",
+    "prebuild": "npm i && rimraf dist",
     "build": "npm run fix && npm run lint && npm run esbuild",
     "esbuild": "npx ncc build src/index.ts -m -e @serverless-devs/core -o dist",
     "test": "jest",
