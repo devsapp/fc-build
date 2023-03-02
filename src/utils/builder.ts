@@ -108,13 +108,13 @@ export default class Builder {
         customContainerConfig,
         dockerfile,
       );
+      const cwd = _.get(codeUri, 'src', codeUri) || path.dirname(dockerFileName);
       let image: string;
       if (useFcBackend) {
-        image = await this.buildImageWithKaniko(buildInput, dockerFileName, imageName);
+        image = await this.buildImageWithKaniko(buildInput, dockerFileName, imageName, cwd);
       } else if (useBuildkit) {
-        image = await this.buildImageWithBuildkit(buildInput, dockerFileName, imageName);
+        image = await this.buildImageWithBuildkit(buildInput, dockerFileName, imageName, cwd);
       } else {
-        const cwd = _.get(codeUri, 'src', codeUri) || path.dirname(dockerFileName);
         image = await this.buildImage(dockerFileName, imageName, cwd);
       }
       return { image };
@@ -198,6 +198,7 @@ export default class Builder {
     buildInput: IBuildInput,
     dockerFileName: string,
     imageName: string,
+    cwd: string,
   ): Promise<string> {
     const { enableBuildkitServer, buildkitServerPort } = Builder;
     logger.debug(`enableBuildkitServer: ${enableBuildkitServer}`);
@@ -210,7 +211,7 @@ export default class Builder {
       await mockDockerConfigFile(buildInput.region, imageName, buildInput.credentials, instanceID);
       const execSyncCmd = `buildctl --addr tcp://${buildkitServerAddr}:${buildkitServerPort} build --no-cache \
       --frontend dockerfile.v0 \
-      --local context=${path.dirname(dockerFileName)} \
+      --local context=${cwd} \
       --local dockerfile=${path.dirname(dockerFileName)} \
       --output type=image,name=${imageName},push=true`;
       logger.debug(`buildImageWithBuildkit enableBuildkitServer execSync:\n${execSyncCmd}`);
@@ -219,7 +220,7 @@ export default class Builder {
     } else {
       const execSyncCmd = `buildctl build --no-cache \
       --frontend dockerfile.v0 \
-      --local context=${path.dirname(dockerFileName)} \
+      --local context=${cwd} \
       --local dockerfile=${path.dirname(dockerFileName)} \
       --output type=image,name=${imageName}`;
       logger.debug(`buildImageWithBuildkit execSync:\n${execSyncCmd}`);
@@ -233,6 +234,7 @@ export default class Builder {
     buildInput: IBuildInput,
     dockerFileName: string,
     imageName: string,
+    cwd: string,
   ): Promise<string> {
     logger.info('start to build image ...');
 
@@ -242,9 +244,7 @@ export default class Builder {
     const internetImage = isVpcAcrRegistry(imageName) ? vpcImageToInternetImage(buildInput.region, imageName) : imageName;
     await mockDockerConfigFile(buildInput.region, internetImage, buildInput.credentials, instanceID);
 
-    const execSyncCmd = `executor --force=true --cache=false --use-new-run=true --dockerfile ${dockerFileName} --context ${path.dirname(
-      dockerFileName,
-    )} --destination ${internetImage}`;
+    const execSyncCmd = `executor --force=true --cache=false --use-new-run=true --dockerfile ${dockerFileName} --context ${cwd} --destination ${internetImage}`;
 
     logger.info(`buildImageWithKaniko execSync:\n${execSyncCmd}`);
     execSync(execSyncCmd, { stdio: 'inherit' });
@@ -300,11 +300,11 @@ export default class Builder {
     // exec build
     if (Builder.enableBuildkitServer) {
       const execSyncCmd = `buildctl --addr tcp://${buildkitServerAddr}:${Builder.buildkitServerPort
-      } build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(
-        dockerfilePath,
-      )} --opt filename=${path.basename(
-        dockerfilePath,
-      )} --opt target=${targetBuildStage} --output type=local,dest=${baseDir}`;
+        } build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(
+          dockerfilePath,
+        )} --opt filename=${path.basename(
+          dockerfilePath,
+        )} --opt target=${targetBuildStage} --output type=local,dest=${baseDir}`;
 
       logger.debug(`buildInBuildtkit enableBuildkitServer execSyncCmd: ${execSyncCmd}`);
       execSync(execSyncCmd, { stdio: 'inherit' });
