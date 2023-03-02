@@ -114,7 +114,8 @@ export default class Builder {
       } else if (useBuildkit) {
         image = await this.buildImageWithBuildkit(buildInput, dockerFileName, imageName);
       } else {
-        image = await this.buildImage(dockerFileName, imageName);
+        const cwd = _.get(codeUri, 'src', codeUri) || path.dirname(dockerFileName);
+        image = await this.buildImage(dockerFileName, imageName, cwd);
       }
       return { image };
     }
@@ -250,11 +251,11 @@ export default class Builder {
     return imageName;
   }
 
-  async buildImage(dockerFileName: string, imageName: string): Promise<string> {
+  async buildImage(dockerFileName: string, imageName: string, cwd: string): Promise<string> {
     logger.info('Building image...');
     execSync(`docker build -t ${imageName} -f ${dockerFileName} .`, {
       stdio: 'inherit',
-      cwd: path.dirname(dockerFileName),
+      cwd,
     });
     logger.log(`Build image(${imageName}) successfully`);
     return imageName;
