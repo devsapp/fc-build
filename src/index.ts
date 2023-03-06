@@ -36,6 +36,7 @@ export default class Build {
       'use-sandbox': useSandbox,
       command,
       'script-file': scriptFile,
+      context,
     }: any = commandParse(inputs, ['custom-args']);
 
     if (h) {
@@ -84,6 +85,7 @@ export default class Build {
         AccessKeySecret: '',
         SecurityToken: '',
       },
+      context,
     };
     const buildkit = useBuildkit || compelUseBuildkit; // 使用 use-buildkit
     if (buildkit || useFcBackend) {

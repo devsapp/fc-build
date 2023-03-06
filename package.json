@@ -38,7 +38,7 @@
     "ln": "ln -s $(pwd)/dist ~/.s/components/devsapp.cn/devsapp/fc-build/dist",
     "start": "npm run prebuild && npm run watch",
     "watch": "npx tsc -w -p tsconfig.json",
-    "prebuild": "npm i && rimraf dist",
+    "prebuild": "npm i && rimraf dist && ex -sc '15i|//@ts-ignore' -cx node_modules/draftlog/index.d.ts",
     "build": "npm run fix && npm run lint && npm run esbuild",
     "esbuild": "npx ncc build src/index.ts -m -e @serverless-devs/core -o dist",
     "test": "jest",
