@@ -108,7 +108,7 @@ export default class Builder {
         customContainerConfig,
         dockerfile,
       );
-      const cwd = _.get(codeUri, 'src', codeUri) || path.dirname(dockerFileName);
+      const cwd = buildInput.context || path.dirname(dockerFileName);
       let image: string;
       if (useFcBackend) {
         image = await this.buildImageWithKaniko(buildInput, dockerFileName, imageName, cwd);
@@ -300,11 +300,11 @@ export default class Builder {
     // exec build
     if (Builder.enableBuildkitServer) {
       const execSyncCmd = `buildctl --addr tcp://${buildkitServerAddr}:${Builder.buildkitServerPort
-        } build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(
-          dockerfilePath,
-        )} --opt filename=${path.basename(
-          dockerfilePath,
-        )} --opt target=${targetBuildStage} --output type=local,dest=${baseDir}`;
+      } build --no-cache --frontend dockerfile.v0 --local context=${baseDir} --local dockerfile=${path.dirname(
+        dockerfilePath,
+      )} --opt filename=${path.basename(
+        dockerfilePath,
+      )} --opt target=${targetBuildStage} --output type=local,dest=${baseDir}`;
 
       logger.debug(`buildInBuildtkit enableBuildkitServer execSyncCmd: ${execSyncCmd}`);
       execSync(execSyncCmd, { stdio: 'inherit' });
