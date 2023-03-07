@@ -38,7 +38,7 @@ export default class Builder {
     private checkAcreeInstanceID;
     private buildImageWithBuildkit;
     private buildImageWithKaniko;
-    buildImage(dockerFileName: string, imageName: string): Promise<string>;
+    buildImage(dockerFileName: string, imageName: string, cwd: string): Promise<string>;
     private buildInBuildtkit;
     buildInDocker({ region, serviceName, serviceProps, functionName, functionProps, verbose, credentials, }: IBuildInput, baseDir: string, codeUri: string, funcArtifactDir: string): Promise<void>;
     buildArtifact({ serviceName, functionName, functionProps, verbose }: IBuildInput, _baseDir: string, codeUri: string, funcArtifactDir: string): Promise<void>;

@@ -20,6 +20,7 @@ export interface IBuildInput {
     region?: string;
     credentials?: ICredentials;
     cleanUselessImage?: Boolean;
+    context?: string;
 }
 export interface IProperties {
     region: string;
