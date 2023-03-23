@@ -29,7 +29,7 @@ export async function getFunfile({
 }): Promise<string | undefined> {
   const funfilePath = path.join(codeUri, 'Funfile');
   const funfileExists = await fileExists(funfilePath);
-  logger.debug(`Funfile path: ${funfilePath}; has Funfile: ${funfileExists}`);
+  logger.debug(`apt-get.list path: ${funfilePath}; has apt-get.list: ${funfileExists}`);
 
   const aptListFilePath = path.join(codeUri, 'apt-get.list');
   const aptListExists = await fileExists(aptListFilePath);
@@ -108,7 +108,7 @@ export async function processFunfileForBuildkit(
   enableBuildkitServer?: boolean,
   buildkitServerPort?: number,
 ) {
-  logger.info('Funfile exist and useBuildkit is specified, fc will use buildkit to build');
+  logger.info('apt-get.list exist and useBuildkit is specified, fc will use buildkit to build');
   const dockerfilePath = path.join(codeUri, '.Funfile.buildkit.generated.dockerfile');
 
   await convertFunfileToDockerfile(
@@ -168,7 +168,7 @@ export async function processFunfile(
   runtime: string,
   functionName: string,
 ): Promise<string> {
-  logger.log('Funfile exist, Fun will use container to build forcely', 'yellow');
+  logger.log('apt-get.list file exist, will use container to build forcely', 'yellow');
 
   const dockerfilePath = path.join(codeUri, '.Funfile.generated.dockerfile');
   await convertFunfileToDockerfile(funfilePath, dockerfilePath, runtime, serviceName, functionName);

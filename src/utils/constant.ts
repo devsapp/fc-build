@@ -76,19 +76,19 @@ export const sourceActivate = {
     customEnvs: [{ key: 'CONDA_DEFAULT_ENV', value: 'py310' }],
     cwdVersion: 'python -V',
   },
-  'nodejs12': {
+  nodejs12: {
     PATH: '/usr/local/versions/node/v12.22.12/bin',
     cwdVersion: 'node -v',
   },
-  'nodejs14': {
+  nodejs14: {
     PATH: '/usr/local/versions/node/v14.19.2/bin',
     cwdVersion: 'node -v',
   },
-  'nodejs16': {
+  nodejs16: {
     PATH: '/usr/local/versions/node/v16.15.0/bin',
     cwdVersion: 'node -v',
   },
-  'nodejs18': {
+  nodejs18: {
     PATH: '/usr/local/versions/node/v18.14.2/bin',
     cwdVersion: 'node -v',
   },

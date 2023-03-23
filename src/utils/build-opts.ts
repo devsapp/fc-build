@@ -202,6 +202,7 @@ async function generateContainerBuildOpts(
       Image: imageName || (await resolveRuntimeToDockerImage(runtime)),
       name: containerName,
       Cmd: cmd,
+      // Entrypoint: null,
       User: resolveDockerUser(),
     },
     ioOpts,
