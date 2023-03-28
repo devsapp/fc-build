@@ -58,18 +58,43 @@ export const FC_BACKEND = 'fc-backend';
 export const sourceActivate = {
   'python2.7': {
     PATH: '/usr/local/envs/py27/bin',
-    CONDA_DEFAULT_ENV: 'py27',
+    customEnvs: [{ key: 'CONDA_DEFAULT_ENV', value: 'py27' }],
+    cwdVersion: 'python -V',
   },
   python3: {
     PATH: '/usr/local/envs/py36/bin',
-    CONDA_DEFAULT_ENV: 'py36',
+    customEnvs: [{ key: 'CONDA_DEFAULT_ENV', value: 'py36' }],
+    cwdVersion: 'python -V',
   },
   'python3.9': {
     PATH: '/usr/local/envs/py39/bin',
-    CONDA_DEFAULT_ENV: 'py39',
+    customEnvs: [{ key: 'CONDA_DEFAULT_ENV', value: 'py39' }],
+    cwdVersion: 'python -V',
+  },
+  'python3.10': {
+    PATH: '/usr/local/envs/py310/bin',
+    customEnvs: [{ key: 'CONDA_DEFAULT_ENV', value: 'py310' }],
+    cwdVersion: 'python -V',
+  },
+  nodejs12: {
+    PATH: '/usr/local/versions/node/v12.22.12/bin',
+    cwdVersion: 'node -v',
+  },
+  nodejs14: {
+    PATH: '/usr/local/versions/node/v14.19.2/bin',
+    cwdVersion: 'node -v',
+  },
+  nodejs16: {
+    PATH: '/usr/local/versions/node/v16.15.0/bin',
+    cwdVersion: 'node -v',
+  },
+  nodejs18: {
+    PATH: '/usr/local/versions/node/v18.14.2/bin',
+    cwdVersion: 'node -v',
   },
   custom: {
     PATH: '/usr/local/envs/py37/bin',
     CONDA_DEFAULT_ENV: 'py37',
+    cwdVersion: 'python -V',
   },
 };

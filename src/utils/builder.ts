@@ -422,12 +422,14 @@ export default class Builder {
 
     if (this.useFcBackend) {
       if (sourceActivate[runtime]) {
-        const { PATH, CONDA_DEFAULT_ENV } = sourceActivate[runtime];
+        const { PATH, customEnvs = [], cwdVersion } = sourceActivate[runtime];
         process.env.PATH = `${PATH}:${process.env.PATH || '/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'}`;
-        process.env.CONDA_DEFAULT_ENV = CONDA_DEFAULT_ENV;
+        for (const { key, value } of customEnvs) {
+          process.env[key] = value;
+        }
         try {
-          const pyVersion = execSync('python -V', { shell: 'bash' });
-          console.log(pyVersion?.toString());
+          const version = execSync(cwdVersion, { shell: 'bash' });
+          console.log(version?.toString());
         } catch (_ex) { /**/ }
       }
 
