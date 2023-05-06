@@ -181,7 +181,7 @@ export async function processFunfile(
   await copyFromImage(imageTag, await getWorkDir(funfilePath), funcArtifactDir);
 
   await fs.remove(dockerfilePath);
-  if (fs.pathExists(path.join(funcArtifactDir, '.fun'))) {
+  if (await fs.pathExists(path.join(funcArtifactDir, '.fun'))) {
     await fs.rename(path.join(funcArtifactDir, '.fun'), path.join(funcArtifactDir, '.s'));
   }
 
