@@ -50,6 +50,9 @@ const runtimeTaskFlows = {
   'nodejs14': {
     [NpmTaskFlow.getManifestName()]: NpmTaskFlow
   },
+  'nodejs16': {
+    [NpmTaskFlow.getManifestName()]: NpmTaskFlow
+  },
   'python2.7': {
     [PipTaskFlow.getManifestName()]: PipTaskFlow
   },
@@ -1101,6 +1104,7 @@ class NpmTaskFlow extends TaskFlow {
       if (fs.pathExistsSync(path.join(this.sourceDir, 'yarn.lock'))) {
         onlyCopyManifestFile(this.sourceDir, this.artifactDir, 'yarn.lock');
       }
+      onlyCopyManifestFile(this.sourceDir, this.artifactDir, '.npmrc');
     }
     this.installTasks.push(new NpmInstallTask(this.artifactDir, this.stages, this.otherPayload.additionalArgs));
   }
@@ -24877,11 +24881,7 @@ var Docker = function(opts) {
     }
   }
 
-  if (opts && opts.modem) {
-    this.modem = opts.modem;
-  } else {
-    this.modem = new Modem(opts);
-  }
+  this.modem = new Modem(opts);
   this.modem.Promise = plibrary;
 };
 
@@ -26821,7 +26821,7 @@ Exec.prototype.inspect = function(opts, callback) {
     });
   } else {
     this.modem.dial(optsf, function(err, data) {
-      if (err) return args.callback(err, data);
+      if (err) return callback(err, data);
       args.callback(err, data);
     });
   }
@@ -27324,7 +27324,7 @@ Node.prototype.inspect = function(opts, callback) {
   var optsf = {
     path: '/nodes/' + this.id,
     method: 'GET',
-    abortSignal: args.opts.abortSignal,
+    abortSignal: args.abortSignal,
     statusCodes: {
       200: true,
       404: 'no such node',
