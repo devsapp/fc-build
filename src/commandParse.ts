@@ -2,7 +2,7 @@ import { commandParse, lodash as _ } from '@serverless-devs/core';
 import logger from './common/logger';
 
 const APTS = {
-  string: ['dockerfile', 'custom-env', 'custom-args'],
+  string: ['dockerfile', 'custom-env', 'custom-args', 'cache-dir'],
   boolean: ['help', 'use-sandbox', 'use-docker', 'use-buildkit', 'clean-useless-image'],
   alias: { dockerfile: 'f', 'use-docker': 'd', help: 'h' },
 };

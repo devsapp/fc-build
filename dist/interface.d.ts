@@ -21,6 +21,7 @@ export interface IBuildInput {
     credentials?: ICredentials;
     cleanUselessImage?: Boolean;
     context?: string;
+    cacheDir?: string;
 }
 export interface IProperties {
     region: string;

@@ -244,7 +244,11 @@ export default class Builder {
     const internetImage = isVpcAcrRegistry(imageName) ? vpcImageToInternetImage(buildInput.region, imageName) : imageName;
     await mockDockerConfigFile(buildInput.region, internetImage, buildInput.credentials, instanceID);
 
-    const execSyncCmd = `executor --force=true --cache=false --use-new-run=true --dockerfile ${dockerFileName} --context ${cwd} --destination ${internetImage}`;
+    let execSyncCmd = `executor --force=true --use-new-run=true --dockerfile ${dockerFileName} --context ${cwd} --destination ${internetImage}`;
+    const cacheDir = _.get(buildInput, 'cacheDir');
+    if (cacheDir) {
+      execSyncCmd = execSyncCmd.concat(' ', `--cache --cache-dir=${cacheDir}`);
+    }
 
     logger.info(`buildImageWithKaniko execSync:\n${execSyncCmd}`);
     execSync(execSyncCmd, { stdio: 'inherit' });
