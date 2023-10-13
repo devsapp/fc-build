@@ -34,6 +34,7 @@ export default class Build {
       'custom-env': customEnv,
       'custom-args': customArgs,
       'use-sandbox': useSandbox,
+      'cache-dir': cacheDir,
       command,
       'script-file': scriptFile,
       context,
@@ -86,6 +87,7 @@ export default class Build {
         SecurityToken: '',
       },
       context,
+      cacheDir,
     };
     const buildkit = useBuildkit || compelUseBuildkit; // 使用 use-buildkit
     if (buildkit || useFcBackend) {
