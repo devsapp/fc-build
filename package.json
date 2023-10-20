@@ -7,7 +7,7 @@
     "@alicloud/pop-core": "^1.7.10",
     "@serverless-devs/core": "latest",
     "dockerfile-ast": "^0.3.2",
-    "dockerode": "^3.2.1",
+    "dockerode": "^4.0.0",
     "draftlog": "^1.0.12",
     "fs-extra": "^9.1.0",
     "httpx": "^2.1.2",
